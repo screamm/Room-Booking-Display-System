@@ -4,12 +4,13 @@ import { supabase } from '../lib/supabase';
 import type { Room, Booking } from '../types/database.types';
 
 const QUICK_BOOK_PHRASES = [
-  "Beam me up!",
-  "Engage!",
-  "Make it so!",
-  "To infinity!",
-  "Warp speed!",
-  "Use the force!",
+  // "Beam me up!",
+  // "Engage!",
+  // "Make it so!",
+  // "To infinity!",
+  // "Warp speed!",
+  // "Use the force!",
+  "Boka nu",
 ];
 
 // Cache för rumdata
@@ -354,7 +355,7 @@ export const RoomDisplay: React.FC = () => {
         {/* Nästa konferens */}
         {nextBooking && (
           <div className="px-6 pb-4">
-            <div className={`p-3 rounded-lg max-w-[40%] ${
+            <div className={`p-3 rounded-lg max-w-[30%] ${
               displayTheme === 'dark' 
                 ? 'bg-blue-900/20 border border-blue-800/50' 
                 : 'bg-blue-100/50 border border-blue-200'
@@ -369,6 +370,13 @@ export const RoomDisplay: React.FC = () => {
                   {nextBooking.start_time.substring(0, 5)} - {nextBooking.end_time.substring(0, 5)}
                 </div>
               </div>
+              {nextBooking.booker && (
+                <div className={`text-xs mt-1 ${
+                  displayTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  {nextBooking.booker}
+                </div>
+              )}
             </div>
           </div>
         )}
