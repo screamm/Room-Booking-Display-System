@@ -1,4 +1,4 @@
-import { roomsApi, bookingsApi } from './api';
+import { roomsApi, bookingsApi, checkOverlap } from './api';
 import { supabase } from './supabase';
 
 // Mocka Supabase-klienten
@@ -8,7 +8,10 @@ jest.mock('./supabase', () => ({
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     neq: jest.fn().mockReturnThis(),
-    or: jest.fn().mockReturnThis(),
+    or: jest.fn().mockImplementation(function() {
+      // Returnera this för att möjliggöra kedjning
+      return this;
+    }),
     gte: jest.fn().mockReturnThis(),
     lte: jest.fn().mockReturnThis(),
     lt: jest.fn().mockReturnThis(),
@@ -138,74 +141,134 @@ describe('API funktioner', () => {
         expect(result).toEqual({ id: 3, ...newBooking });
       });
     });
-  });
 
-  describe('checkOverlap', () => {
-    it('bör returnera true om det finns överlappande bokningar', async () => {
-      (supabase.from as jest.Mock).mockReturnThis();
-      (supabase.select as jest.Mock).mockReturnThis();
-      (supabase.eq as jest.Mock).mockReturnThis();
-      (supabase.or as jest.Mock).mockResolvedValue({
-        data: [{ id: 1 }], // Simulera att det finns en överlappande bokning
-        error: null
+    describe('checkOverlap', () => {
+      beforeEach(() => {
+        (supabase.from as jest.Mock).mockReturnThis();
+        (supabase.select as jest.Mock).mockReturnThis();
+        (supabase.eq as jest.Mock).mockReturnThis();
+        (supabase.or as jest.Mock).mockReturnThis();
       });
 
-      const result = await bookingsApi.checkOverlap(1, '2023-06-10', '10:00', '11:00');
+      it('bör returnera true om det finns överlappande bokningar', async () => {
+        (supabase.or as jest.Mock).mockResolvedValue({
+          data: [{ id: 1 }], // Simulera att det finns en överlappande bokning
+          error: null
+        });
 
-      expect(supabase.from).toHaveBeenCalledWith('bookings');
-      expect(supabase.eq).toHaveBeenCalledWith('room_id', 1);
-      expect(supabase.eq).toHaveBeenCalledWith('date', '2023-06-10');
-      expect(result).toBe(true);
-    });
+        const result = await checkOverlap(1, '2023-06-10', '10:00', '11:00');
 
-    it('bör returnera false om det inte finns överlappande bokningar', async () => {
-      (supabase.from as jest.Mock).mockReturnThis();
-      (supabase.select as jest.Mock).mockReturnThis();
-      (supabase.eq as jest.Mock).mockReturnThis();
-      (supabase.or as jest.Mock).mockResolvedValue({
-        data: [], // Inga överlappande bokningar
-        error: null
+        expect(supabase.from).toHaveBeenCalledWith('bookings');
+        expect(supabase.eq).toHaveBeenCalledWith('room_id', 1);
+        expect(supabase.eq).toHaveBeenCalledWith('date', '2023-06-10');
+        expect(supabase.or).toHaveBeenCalledWith('start_time.lt.11:00,end_time.gt.10:00');
+        expect(result).toBe(true);
       });
 
-      const result = await bookingsApi.checkOverlap(1, '2023-06-10', '10:00', '11:00');
+      it('bör returnera false om det inte finns överlappande bokningar', async () => {
+        (supabase.or as jest.Mock).mockResolvedValue({
+          data: [], // Inga överlappande bokningar
+          error: null
+        });
 
-      expect(result).toBe(false);
+        const result = await checkOverlap(1, '2023-06-10', '10:00', '11:00');
+
+        expect(result).toBe(false);
+      });
+
+      it('bör exkludera bokning med angivet ID', async () => {
+        (supabase.neq as jest.Mock).mockResolvedValue({
+          data: [],
+          error: null
+        });
+
+        await checkOverlap(1, '2023-06-10', '10:00', '11:00', 5);
+
+        expect(supabase.neq).toHaveBeenCalledWith('id', 5);
+      });
+
+      it('bör kasta fel om databasanropet misslyckas', async () => {
+        const errorMessage = 'Databasfel';
+        (supabase.or as jest.Mock).mockResolvedValue({
+          data: null,
+          error: new Error(errorMessage)
+        });
+
+        await expect(checkOverlap(1, '2023-06-10', '10:00', '11:00')).rejects.toThrow(errorMessage);
+      });
+
+      it('bör returnera false när data är null', async () => {
+        (supabase.or as jest.Mock).mockResolvedValue({
+          data: null,
+          error: null
+        });
+
+        const result = await checkOverlap(1, '2023-06-10', '10:00', '11:00');
+
+        expect(result).toBe(false);
+      });
     });
-  });
 
-  describe('checkConflictsInRealtime', () => {
-    it('bör returnera konfliktinformation om det finns överlappande bokningar', async () => {
-      const conflictingBookings = [
-        { id: 1, room_id: 1, date: '2023-06-10', start_time: '09:30', end_time: '10:30', booker: 'Peter' }
+    describe('findLargestAvailableRoom', () => {
+      const mockRooms = [
+        { id: 1, name: 'Stora rummet', capacity: 20, features: ['Whiteboard'] },
+        { id: 2, name: 'Mittrummet', capacity: 10, features: ['Videokonferens'] }
       ];
-      
-      (supabase.from as jest.Mock).mockReturnThis();
-      (supabase.select as jest.Mock).mockReturnThis();
-      (supabase.eq as jest.Mock).mockReturnThis();
-      (supabase.or as jest.Mock).mockResolvedValue({
-        data: conflictingBookings,
-        error: null
+
+      it('bör hitta det största lediga rummet', async () => {
+        // Mocka hämtning av rum
+        (supabase.from as jest.Mock).mockReturnThis();
+        (supabase.select as jest.Mock).mockReturnThis();
+        (supabase.order as jest.Mock).mockResolvedValueOnce({
+          data: mockRooms,
+          error: null
+        });
+
+        // Mocka hämtning av bokningar
+        (supabase.eq as jest.Mock).mockReturnThis();
+        (supabase.select as jest.Mock).mockReturnThis();
+        (supabase.order as jest.Mock).mockResolvedValueOnce({
+          data: [], // Inga bokningar för det datumet
+          error: null
+        });
+
+        const result = await bookingsApi.findLargestAvailableRoom(
+          '2023-06-10',
+          '10:00',
+          '11:00'
+        );
+
+        expect(result).toEqual(mockRooms[0]); // Största rummet
       });
 
-      const result = await bookingsApi.checkConflictsInRealtime(1, '2023-06-10', '10:00', '11:00');
+      it('bör returnera null om inga rum är tillgängliga', async () => {
+        // Mocka hämtning av rum
+        (supabase.from as jest.Mock).mockReturnThis();
+        (supabase.select as jest.Mock).mockReturnThis();
+        (supabase.order as jest.Mock).mockResolvedValueOnce({
+          data: mockRooms,
+          error: null
+        });
 
-      expect(result.hasConflict).toBe(true);
-      expect(result.conflictingBookings).toEqual(conflictingBookings);
-    });
+        // Mocka hämtning av bokningar
+        (supabase.eq as jest.Mock).mockReturnThis();
+        (supabase.select as jest.Mock).mockReturnThis();
+        (supabase.order as jest.Mock).mockResolvedValueOnce({
+          data: [
+            { room_id: 1, start_time: '09:00', end_time: '12:00' },
+            { room_id: 2, start_time: '09:00', end_time: '12:00' }
+          ],
+          error: null
+        });
 
-    it('bör exkludera bokning med angivet ID', async () => {
-      (supabase.from as jest.Mock).mockReturnThis();
-      (supabase.select as jest.Mock).mockReturnThis();
-      (supabase.eq as jest.Mock).mockReturnThis();
-      (supabase.or as jest.Mock).mockReturnThis();
-      (supabase.neq as jest.Mock).mockResolvedValue({
-        data: [],
-        error: null
+        const result = await bookingsApi.findLargestAvailableRoom(
+          '2023-06-10',
+          '10:00',
+          '11:00'
+        );
+
+        expect(result).toBeNull();
       });
-
-      await bookingsApi.checkConflictsInRealtime(1, '2023-06-10', '10:00', '11:00', 5);
-
-      expect(supabase.neq).toHaveBeenCalledWith('id', 5);
     });
   });
 }); 

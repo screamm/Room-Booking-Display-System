@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Room, BookingType } from '../types/database.types';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 import { bookingsApi } from '../lib/api';
@@ -47,8 +47,8 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
     bookingType: initialData.bookingType || preferences.defaultBookingType as BookingType,
   });
 
-  // Beräkna sluttid baserat på starttid och varaktighet i minuter
-  function calculateEndTime(startTime: string, durationMinutes: number): string {
+  // Memoized calculateEndTime function
+  const calculateEndTime = useCallback((startTime: string, durationMinutes: number): string => {
     const [hours, minutes] = startTime.split(':').map(Number);
     
     let endHour = hours;
@@ -66,7 +66,7 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
     }
     
     return `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
-  }
+  }, []);
 
   // Rekommenderat rum
   const [suggestedRoom, setSuggestedRoom] = useState<Room | null>(null);
@@ -74,20 +74,24 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
   // Validation state
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   
-  // Rum som är valbart (filtrera ut för kapacitet eller funktioner om det behövs)
-  const availableRooms = rooms;
+  // Memoized availableRooms
+  const availableRooms = useMemo(() => {
+    return rooms.filter(room => {
+      // Lägg till eventuella filter här
+      return true;
+    });
+  }, [rooms]);
   
-  // Tidsalternativ (08:00 - 17:00, 30 min intervaller)
-  const timeOptions = [];
-  for (let hour = 8; hour <= 17; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      if (hour === 17 && minute > 0) continue; // Sluta vid 17:00
-      
-      const formattedHour = hour.toString().padStart(2, '0');
-      const formattedMinute = minute.toString().padStart(2, '0');
-      timeOptions.push(`${formattedHour}:${formattedMinute}`);
+  // Memoized timeOptions
+  const timeOptions = useMemo(() => {
+    const options = [];
+    for (let hour = 8; hour <= 17; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        options.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+      }
     }
-  }
+    return options;
+  }, []);
   
   // Bokningstyper med färger
   const bookingTypes = [
@@ -196,8 +200,8 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
     ? rooms.find(room => room.id === parseInt(formData.roomId))
     : null;
 
-  // Funktion för att föreslå lämpligt rum baserat på antal personer
-  const suggestRoom = (attendees: number) => {
+  // Memoized suggestRoom function
+  const suggestRoom = useCallback((attendees: number) => {
     if (!rooms.length) return;
     
     // Hitta rum med tillräcklig kapacitet, sorterade från minst till störst
@@ -221,7 +225,7 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
       const largestRoom = [...rooms].sort((a, b) => b.capacity - a.capacity)[0];
       setSuggestedRoom(largestRoom);
     }
-  };
+  }, [rooms, formData.roomId]);
 
   // Uppdatera rumrekommendation när antalet deltagare ändras
   useEffect(() => {
@@ -244,51 +248,47 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [conflictingBookings, setConflictingBookings] = useState<any[]>([]);
 
-  // Kontrollera efter konflikter när tid, datum eller rum ändras
+  // Debounced conflict check
   useEffect(() => {
-    // Bara kontrollera om alla obligatoriska fält är ifyllda
-    if (!formData.roomId || !formData.date || !formData.startTime || !formData.endTime) {
-      setConflictError(null);
-      setConflictingBookings([]);
-      return;
-    }
-
-    // Endast kontrollera om sluttiden är efter starttiden
-    if (formData.startTime >= formData.endTime) {
-      return;
-    }
-
-    const checkBookingConflicts = async () => {
-      setIsCheckingConflicts(true);
-      try {
-        const roomId = parseInt(formData.roomId);
-        const bookingId = isEditing && initialData.id ? initialData.id : undefined;
-        
-        // Anropa API för att kontrollera konflikter
-        const result = await bookingsApi.checkConflictsInRealtime(
-          roomId,
-          formData.date,
-          formData.startTime,
-          formData.endTime,
-          bookingId
-        );
-        
-        if (result.hasConflict) {
-          setConflictError('Det finns redan en bokning för denna tid');
-          setConflictingBookings(result.conflictingBookings || []);
-        } else {
-          setConflictError(null);
-          setConflictingBookings([]);
-        }
-      } catch (error) {
-        console.error('Fel vid kontroll av bokningskonflikter:', error);
-      } finally {
-        setIsCheckingConflicts(false);
-      }
-    };
-    
-    // Använd en timeout för att inte överbelasta servern
     const timeoutId = setTimeout(() => {
+      if (!formData.roomId || !formData.date || !formData.startTime || !formData.endTime) {
+        setConflictError(null);
+        setConflictingBookings([]);
+        return;
+      }
+
+      if (formData.startTime >= formData.endTime) {
+        return;
+      }
+
+      const checkBookingConflicts = async () => {
+        setIsCheckingConflicts(true);
+        try {
+          const roomId = parseInt(formData.roomId);
+          const bookingId = isEditing && initialData.id ? initialData.id : undefined;
+          
+          const result = await bookingsApi.checkConflictsInRealtime(
+            roomId,
+            formData.date,
+            formData.startTime,
+            formData.endTime,
+            bookingId
+          );
+          
+          if (result.hasConflict) {
+            setConflictError('Det finns redan en bokning för denna tid');
+            setConflictingBookings(result.conflictingBookings || []);
+          } else {
+            setConflictError(null);
+            setConflictingBookings([]);
+          }
+        } catch (error) {
+          console.error('Fel vid kontroll av bokningskonflikter:', error);
+        } finally {
+          setIsCheckingConflicts(false);
+        }
+      };
+      
       checkBookingConflicts();
     }, 500);
     

@@ -529,7 +529,17 @@ const ConferenceRoomBooking: React.FC = () => {
   const handleDeleteBooking = async (id: number): Promise<void> => {
     try {
       await bookingsApi.delete(id);
-      setBookings(prevBookings => prevBookings.filter(booking => booking.id !== id));
+      
+      // Ladda om bokningarna för att säkerställa att vi har senaste data
+      if (selectedDate) {
+        const bookingsData = await bookingsApi.getByDate(selectedDate);
+        const mappedBookings = mapDbBookingsToLocal(bookingsData);
+        setBookings(prevBookings => {
+          const otherDatesBookings = prevBookings.filter(b => b.date !== selectedDate);
+          return [...otherDatesBookings, ...mappedBookings];
+        });
+      }
+      
       setShowDeleteConfirmation(false);
       setBookingToDelete(null);
       
@@ -740,9 +750,10 @@ const ConferenceRoomBooking: React.FC = () => {
       <div className="space-y-3">
         {sortedBookings.map(booking => (
           <div 
-            key={booking.id} 
+            key={`${booking.roomId}-${booking.startTime}`}
+            data-testid="booking-cell"
             className={`p-4 rounded-lg shadow-sm cursor-pointer transition-all hover:shadow-md ${getBookingTypeColor(booking.bookingType)} bg-opacity-10 hover:bg-opacity-20 border border-l-4 ${getBookingTypeColor(booking.bookingType).replace('bg-', 'border-')}`}
-            onClick={() => handleEditBooking(booking.id)}
+            onClick={() => handleCellClick(booking.roomId, new Date(booking.date), parseInt(booking.startTime.split(':')[0]))}
           >
             <div className="flex justify-between items-start">
               <div>
@@ -758,6 +769,7 @@ const ConferenceRoomBooking: React.FC = () => {
                   {booking.bookingType && booking.bookingType.charAt(0).toUpperCase() + booking.bookingType.slice(1) || 'Möte'}
                 </span>
                 <button 
+                  data-testid="delete-booking-button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setBookingToDelete(booking);
@@ -864,7 +876,7 @@ const ConferenceRoomBooking: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-        <h1 className="text-2xl font-bold mb-4 md:mb-0">Konferensrumsbokning</h1>
+        <h1 className="text-2xl font-bold mb-4 md:mb-0 text-gray-900 dark:text-gray-100">Konferensrumsbokning</h1>
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
           <GoogleCalendarSync onSyncComplete={() => {
             // Ladda om bokningar efter synkronisering
@@ -877,23 +889,22 @@ const ConferenceRoomBooking: React.FC = () => {
       <div className="flex space-x-2 mb-6">
         <button 
           onClick={() => updateCurrentView('week-view')} 
-          className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentView === 'week-view' 
-            ? 'bg-primary-500 text-white dark:bg-primary-600 shadow-soft' 
-            : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600'}`}
+          className={`px-4 py-2 rounded-lg transition-all duration-200 ${currentView === 'week-view' 
+            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white dark:from-primary-600 dark:to-primary-700 shadow-soft' 
+            : 'bg-white dark:bg-dark-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-700 border border-gray-200 dark:border-dark-600'}`}
         >
           <div className="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h10v10H5V5z" clipRule="evenodd" />
-              <path d="M7 7h2v2H7V7zm0 4h2v2H7v-2zm4-4h2v2h-2V7zm0 4h2v2h-2v-2z" />
+              <path fillRule="evenodd" d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" clipRule="evenodd" />
             </svg>
             Veckokalender
           </div>
         </button>
         <button 
           onClick={() => updateCurrentView('calendar')} 
-          className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentView === 'calendar' 
-            ? 'bg-primary-500 text-white dark:bg-primary-600 shadow-soft' 
-            : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600'}`}
+          className={`px-4 py-2 rounded-lg transition-all duration-200 ${currentView === 'calendar' 
+            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white dark:from-primary-600 dark:to-primary-700 shadow-soft' 
+            : 'bg-white dark:bg-dark-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-700 border border-gray-200 dark:border-dark-600'}`}
         >
           <div className="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -908,12 +919,12 @@ const ConferenceRoomBooking: React.FC = () => {
       
       {currentView === 'week-view' && (
         <DndProvider backend={HTML5Backend}>
-          <div className="bg-white dark:bg-dark-700 rounded-xl shadow-soft dark:shadow-soft-dark overflow-x-auto">
+          <div className="bg-white dark:bg-gradient-to-br dark:from-dark-900 dark:via-dark-800 dark:to-dark-900 rounded-xl shadow-soft dark:shadow-soft-dark overflow-x-auto">
             <div className="flex justify-between items-center p-4 border-b dark:border-dark-600">
               <div className="flex space-x-2">
                 <button 
                   onClick={handlePrevWeek}
-                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-700 dark:hover:bg-dark-600 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-600 transition-all duration-200 flex items-center justify-center"
                   aria-label="Föregående vecka"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -922,7 +933,7 @@ const ConferenceRoomBooking: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleCurrentWeek}
-                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 px-3 py-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center gap-2"
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-700 dark:hover:bg-dark-600 dark:text-gray-200 px-3 py-2 rounded-lg border border-gray-200 dark:border-dark-600 transition-all duration-200 flex items-center gap-2"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-500 dark:text-primary-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
@@ -931,7 +942,7 @@ const ConferenceRoomBooking: React.FC = () => {
                 </button>
                 <button 
                   onClick={handleNextWeek}
-                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-700 dark:hover:bg-dark-600 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-600 transition-all duration-200 flex items-center justify-center"
                   aria-label="Nästa vecka"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -940,12 +951,12 @@ const ConferenceRoomBooking: React.FC = () => {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400 italic hidden md:inline">Du kan dra för att boka flera timmar</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300 italic hidden md:inline">Du kan dra för att boka flera timmar</span>
                 <button 
                   onClick={showBookingForm}
-                  className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
+                  className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 dark:from-primary-600 dark:to-primary-700 dark:hover:from-primary-500 dark:hover:to-primary-600 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
                   Ny bokning
@@ -955,14 +966,14 @@ const ConferenceRoomBooking: React.FC = () => {
             
             <div className="min-w-max">
               <div className="grid grid-cols-8 border-b dark:border-dark-600" role="row">
-                <div className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-600" role="columnheader"></div>
+                <div className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-800 text-gray-700 dark:text-gray-200" role="columnheader"></div>
                 {weekDays.map((day, i) => (
                   <div 
                     key={i} 
                     className={`p-3 text-center font-medium ${
                       new Date().toISOString().split('T')[0] === day.toISOString().split('T')[0] 
-                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-b-2 border-primary-500 dark:border-primary-400' 
-                        : 'bg-gray-50 dark:bg-dark-600 text-gray-700 dark:text-gray-300'
+                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-200 border-b-2 border-primary-500 dark:border-primary-400' 
+                        : 'bg-gray-50 dark:bg-dark-800 text-gray-700 dark:text-gray-200'
                     }`}
                     role="columnheader"
                     aria-label={formatDateHeader(day)}
@@ -979,7 +990,7 @@ const ConferenceRoomBooking: React.FC = () => {
                   role="row"
                 >
                   <div 
-                    className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-700 text-primary-700 dark:text-primary-400 flex items-center"
+                    className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-900 text-primary-700 dark:text-primary-200 flex items-center"
                     role="rowheader"
                   >
                     {room.name}
@@ -1005,7 +1016,8 @@ const ConferenceRoomBooking: React.FC = () => {
                         
                         return (
                           <DraggableBookingCell
-                            key={hour}
+                            key={`${room.id}-${hour}`}
+                            data-testid="booking-cell"
                             roomId={room.id}
                             day={new Date(day)}
                             hour={hour}
@@ -1037,11 +1049,11 @@ const ConferenceRoomBooking: React.FC = () => {
             </h2>
             <button
               onClick={showBookingForm}
-              className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white p-2 rounded-lg transition-all duration-200 shadow-soft"
+              className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 dark:from-primary-600 dark:to-primary-700 dark:hover:from-primary-500 dark:hover:to-primary-600 text-white p-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg"
               aria-label="Ny bokning"
             >
               <div className="flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
                 <span>Ny bokning</span>
@@ -1053,20 +1065,20 @@ const ConferenceRoomBooking: React.FC = () => {
           <div className="hidden md:block">
             <div className="grid grid-cols-1 gap-6">
               {bookingsByRoom.map(({ room, bookings }) => (
-                <div key={room.id} className="border dark:border-dark-600 rounded-xl p-6 bg-white dark:bg-dark-700 shadow-soft dark:shadow-soft-dark transition-all duration-300 hover:shadow-soft-lg dark:hover:shadow-soft-lg-dark">
+                <div key={room.id} className="border dark:border-dark-600 rounded-xl p-6 bg-white dark:bg-gradient-to-br dark:from-dark-900 dark:via-dark-800 dark:to-dark-900 shadow-soft dark:shadow-soft-dark transition-all duration-300 hover:shadow-soft-lg dark:hover:shadow-soft-lg-dark">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-5 gap-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold">
                         {room.name.charAt(0)}
                       </div>
-                      <h2 className="text-xl font-bold text-primary-700 dark:text-primary-400">
+                      <h2 className="text-xl font-bold text-primary-700 dark:text-primary-300">
                         {room.name} 
-                        <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
+                        <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-300">
                           ({room.capacity} personer)
                         </span>
                       </h2>
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400 flex flex-wrap gap-2">
+                    <div className="text-sm text-gray-600 dark:text-gray-300 flex flex-wrap gap-2">
                       {room.features.map((feature, index) => (
                         <span key={index} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-600 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-dark-500">
                           {feature}
@@ -1089,12 +1101,16 @@ const ConferenceRoomBooking: React.FC = () => {
                                 <span className="font-medium text-gray-800 dark:text-gray-200">{booking.booker}</span>
                               </div>
                               {booking.purpose && 
-                                <p className="text-sm text-gray-600 dark:text-gray-400 ml-1">{booking.purpose}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 ml-1">{booking.purpose}</p>
                               }
                             </div>
                             <div className="flex items-center gap-2">
                               <button 
-                                onClick={() => handleEditBooking(booking.id)}
+                                data-testid="edit-booking-button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditBooking(booking.id);
+                                }}
                                 className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1104,7 +1120,12 @@ const ConferenceRoomBooking: React.FC = () => {
                                 Redigera
                               </button>
                               <button 
-                                onClick={() => confirmDeleteBooking(booking)}
+                                data-testid="delete-booking-button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDeleteBooking(booking);
+                                }}
+                                aria-label="Ta bort bokning"
                                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1147,14 +1168,14 @@ const ConferenceRoomBooking: React.FC = () => {
       )}
       
       {currentView === 'form' && (
-        <div className="bg-white dark:bg-dark-700 rounded-xl shadow-soft dark:shadow-soft-dark p-6">
+        <div className="bg-white dark:bg-gradient-to-br dark:from-dark-900 dark:via-dark-800 dark:to-dark-900 rounded-xl shadow-soft dark:shadow-soft-dark p-6">
           <div className="flex items-center mb-6 gap-3">
             <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-primary-700 dark:text-primary-400">
+            <h2 className="text-2xl font-bold text-primary-700 dark:text-primary-300">
               {editingBookingId ? 'Redigera bokning' : 'Boka konferensrum'}
             </h2>
           </div>
@@ -1282,7 +1303,7 @@ const ConferenceRoomBooking: React.FC = () => {
                 type="submit"
                 className="px-5 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
                 {editingBookingId ? 'Spara ändringar' : 'Boka rum'}
@@ -1307,11 +1328,11 @@ const ConferenceRoomBooking: React.FC = () => {
                 Är du säker på att du vill ta bort denna bokning?
               </p>
               <div className="text-sm text-left bg-gray-50 dark:bg-dark-600 p-3 rounded-lg mb-4">
-                <p><strong>Rum:</strong> {bookingToDelete.roomName}</p>
-                <p><strong>Datum:</strong> {new Date(bookingToDelete.date).toLocaleDateString('sv-SE')}</p>
-                <p><strong>Tid:</strong> {formatTime(bookingToDelete.startTime)} - {formatTime(bookingToDelete.endTime)}</p>
-                <p><strong>Bokad av:</strong> {bookingToDelete.booker}</p>
-                {bookingToDelete.purpose && <p><strong>Syfte:</strong> {bookingToDelete.purpose}</p>}
+                <p className="text-gray-700 dark:text-gray-300"><strong className="text-gray-800 dark:text-gray-200">Rum:</strong> {bookingToDelete.roomName}</p>
+                <p className="text-gray-700 dark:text-gray-300"><strong className="text-gray-800 dark:text-gray-200">Datum:</strong> {new Date(bookingToDelete.date).toLocaleDateString('sv-SE')}</p>
+                <p className="text-gray-700 dark:text-gray-300"><strong className="text-gray-800 dark:text-gray-200">Tid:</strong> {formatTime(bookingToDelete.startTime)} - {formatTime(bookingToDelete.endTime)}</p>
+                <p className="text-gray-700 dark:text-gray-300"><strong className="text-gray-800 dark:text-gray-200">Bokad av:</strong> {bookingToDelete.booker}</p>
+                {bookingToDelete.purpose && <p className="text-gray-700 dark:text-gray-300"><strong className="text-gray-800 dark:text-gray-200">Syfte:</strong> {bookingToDelete.purpose}</p>}
               </div>
             </div>
             

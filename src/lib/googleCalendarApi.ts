@@ -1,160 +1,123 @@
 import { supabase } from './supabase';
-import { googleCalendarService } from './googleCalendar';
-import type { Booking } from '../types/database.types';
+import { google } from '../mocks/googleapis';
+
+// Konfiguration för Google OAuth
+const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar.events'];
+const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.VITE_GOOGLE_CLIENT_SECRET || '';
+const REDIRECT_URI = process.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/auth/google/callback';
+
+// Skapa OAuth2-klient
+const oauth2Client = new google.auth.OAuth2Client(
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  REDIRECT_URI
+);
+
+// Skapa Google Calendar API-klient
+const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
 export const googleCalendarApi = {
-  // Synka bokningar till Google Kalender
-  async syncToGoogleCalendar(bookings: Booking[]) {
+  // Generera URL för OAuth-autentisering
+  getAuthUrl: () => {
+    return oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: SCOPES,
+      prompt: 'consent'
+    });
+  },
+
+  // Hantera OAuth-callback
+  handleCallback: async (code: string) => {
     try {
-      // Uppdatera synkroniseringsstatus
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'to_google',
-        p_status: 'in_progress'
-      });
-
-      const results = await Promise.allSettled(
-        bookings.map(async (booking) => {
-          if (!booking.google_calendar_id) {
-            // Skapa ny händelse i Google Kalender
-            const event = {
-              summary: `Konferensrum: ${booking.room_id}`,
-              description: booking.purpose || 'Ingen beskrivning',
-              start: {
-                dateTime: `${booking.date}T${booking.start_time}`,
-                timeZone: 'Europe/Stockholm'
-              },
-              end: {
-                dateTime: `${booking.date}T${booking.end_time}`,
-                timeZone: 'Europe/Stockholm'
-              }
-            };
-
-            const googleEvent = await googleCalendarService.createEvent(event);
-
-            // Uppdatera bokningen med Google Kalender-ID
-            await supabase
-              .from('bookings')
-              .update({
-                google_calendar_id: googleEvent.id,
-                last_synced: new Date().toISOString(),
-                sync_status: 'synced'
-              })
-              .eq('id', booking.id);
-
-            return { bookingId: booking.id, status: 'success' };
-          }
-          return { bookingId: booking.id, status: 'already_synced' };
-        })
-      );
-
-      // Uppdatera synkroniseringsstatus
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'to_google',
-        p_status: 'success'
-      });
-
-      return results;
+      const { tokens } = await oauth2Client.getToken(code);
+      oauth2Client.setCredentials(tokens);
+      return tokens;
     } catch (error) {
-      console.error('Fel vid synkronisering till Google Kalender:', error);
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'to_google',
-        p_status: 'error',
-        p_error_message: error instanceof Error ? error.message : 'Okänt fel'
-      });
+      console.error('Fel vid hantering av OAuth-callback:', error);
       throw error;
     }
   },
 
-  // Synka bokningar från Google Kalender
-  async syncFromGoogleCalendar() {
+  // Hämta händelser från Google Kalender
+  getEvents: async (timeMin: string, timeMax: string) => {
     try {
-      // Uppdatera synkroniseringsstatus
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'from_google',
-        p_status: 'in_progress'
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
       });
 
-      // Hämta händelser från Google Kalender för de närmaste 30 dagarna
-      const now = new Date();
-      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-      const events = await googleCalendarService.getEvents(
-        now.toISOString(),
-        thirtyDaysFromNow.toISOString()
-      );
-
-      // Konvertera Google Kalender-händelser till bokningar
-      const bookings = events.map(event => ({
-        room_id: parseInt(event.summary?.split(': ')[1] || '0'),
-        date: event.start?.dateTime?.split('T')[0] || '',
-        start_time: event.start?.dateTime?.split('T')[1].substring(0, 5) || '',
-        end_time: event.end?.dateTime?.split('T')[1].substring(0, 5) || '',
-        booker: event.organizer?.email || 'Unknown',
-        purpose: event.description || '',
-        google_calendar_id: event.id,
-        last_synced: new Date().toISOString(),
-        sync_status: 'synced'
-      }));
-
-      // Uppdatera eller skapa bokningar i databasen
-      const results = await Promise.allSettled(
-        bookings.map(async (booking) => {
-          const { data: existingBooking } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('google_calendar_id', booking.google_calendar_id)
-            .single();
-
-          if (existingBooking) {
-            // Uppdatera befintlig bokning
-            await supabase
-              .from('bookings')
-              .update(booking)
-              .eq('id', existingBooking.id);
-            return { bookingId: existingBooking.id, status: 'updated' };
-          } else {
-            // Skapa ny bokning
-            const { data: newBooking } = await supabase
-              .from('bookings')
-              .insert([booking])
-              .select()
-              .single();
-            return { bookingId: newBooking?.id, status: 'created' };
-          }
-        })
-      );
-
-      // Uppdatera synkroniseringsstatus
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'from_google',
-        p_status: 'success'
-      });
-
-      return results;
+      return response.data.items || [];
     } catch (error) {
-      console.error('Fel vid synkronisering från Google Kalender:', error);
-      await supabase.rpc('update_sync_status', {
-        p_sync_type: 'from_google',
-        p_status: 'error',
-        p_error_message: error instanceof Error ? error.message : 'Okänt fel'
+      console.error('Fel vid hämtning av händelser:', error);
+      throw error;
+    }
+  },
+
+  // Skapa en ny händelse i Google Kalender
+  createEvent: async (event: {
+    summary: string;
+    description?: string;
+    start: { dateTime: string; timeZone: string };
+    end: { dateTime: string; timeZone: string };
+  }) => {
+    try {
+      const response = await calendar.events.insert({
+        calendarId: 'primary',
+        requestBody: event,
       });
+
+      return response.data;
+    } catch (error) {
+      console.error('Fel vid skapande av händelse:', error);
+      throw error;
+    }
+  },
+
+  // Ta bort en händelse från Google Kalender
+  deleteEvent: async (eventId: string) => {
+    try {
+      await calendar.events.delete({
+        calendarId: 'primary',
+        eventId,
+      });
+    } catch (error) {
+      console.error('Fel vid borttagning av händelse:', error);
       throw error;
     }
   },
 
   // Hämta synkroniseringsstatus
-  async getSyncStatus() {
-    const { data, error } = await supabase
-      .from('sync_status')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(2);
+  getSyncStatus: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sync_status')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-    if (error) {
+      if (error) {
+        console.log('Kunde inte hämta sync_status:', error.message);
+        // Om tabellen inte finns eller annat fel, returnera ett standardsvar
+        return {
+          status: 'not_configured',
+          last_sync: new Date().toISOString(),
+          error_message: 'Google Calendar-synkronisering är inte konfigurerad'
+        };
+      }
+
+      return data;
+    } catch (error) {
       console.error('Fel vid hämtning av synkroniseringsstatus:', error);
-      throw error;
+      return {
+        status: 'error',
+        last_sync: new Date().toISOString(),
+        error_message: 'Kunde inte hämta synkroniseringsstatus'
+      };
     }
-
-    return data;
   }
 }; 

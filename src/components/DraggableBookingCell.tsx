@@ -1,35 +1,11 @@
 import React, { useRef } from 'react';
-import { useDrag, useDrop } from 'react-dnd';
-import type { Room, BookingType } from '../types/database.types';
-import { formatTime } from '../utils/dateUtils';
+import { useDrag } from 'react-dnd';
+import type { BookingType } from '../types/database.types';
 
-// Typer för droppable items
+// ItemTypes för drag and drop
 const ItemTypes = {
-  BOOKING_CELL: 'bookingCell',
+  BOOKING_CELL: 'booking_cell'
 };
-
-// Typ för drag-item
-interface DragItem {
-  roomId: number;
-  hour: number;
-  day: Date;
-}
-
-// Props för komponenten
-interface DraggableBookingCellProps {
-  roomId: number;
-  day: Date;
-  hour: number;
-  isPastHour: boolean;
-  isBooked: boolean;
-  bookingInfo: any | null;
-  formatTime: (time: string) => string;
-  bookingType?: BookingType;
-  onCellClick: (roomId: number, day: Date, hour: number) => void;
-  onEditBooking: (bookingId: number) => void;
-  onDeleteBooking: (bookingInfo: any) => void;
-  onDragEnd: (roomId: number, day: Date, startHour: number, endHour: number) => void;
-}
 
 // Färgkodning för olika bokningstyper
 const bookingTypeColors = {
@@ -48,157 +24,158 @@ const getBookingTypeColor = (bookingType?: BookingType): string => {
   return bookingTypeColors[bookingType];
 };
 
+interface DraggableBookingCellProps {
+  roomId: number;
+  day: Date;
+  hour: number;
+  isPastHour: boolean;
+  isBooked: boolean;
+  bookingInfo: any;
+  formatTime: (time: string) => string;
+  onCellClick: (roomId: number, date: Date, hour: number) => void;
+  onEditBooking: (id: number) => void;
+  onDeleteBooking: (booking: any) => void;
+  onDragEnd: (roomId: number, day: Date, startHour: number, endHour: number) => void;
+}
+
 const DraggableBookingCell: React.FC<DraggableBookingCellProps> = ({
-  roomId,
-  day,
-  hour,
-  isPastHour,
-  isBooked,
-  bookingInfo,
-  formatTime,
-  onCellClick,
-  onEditBooking,
-  onDeleteBooking,
-  onDragEnd
+  roomId, day, hour, isPastHour, isBooked, bookingInfo, formatTime,
+  onCellClick, onEditBooking, onDeleteBooking, onDragEnd
 }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  // Referens till cell för drag-slut koordinater
+  const cellRef = useRef<HTMLDivElement>(null);
   
-  // Beräkna längden på bokningen i timmar
-  let bookingLength = 1;
-  if (isBooked && bookingInfo) {
+  // Drag-start koordinater
+  const [dragStartY, setDragStartY] = React.useState<number | null>(null);
+  
+  // Beräkna timmar för bokningen om den redan finns
+  const getBookingDuration = (): number => {
+    if (!bookingInfo) return 1;
     const startHour = parseInt(bookingInfo.startTime.split(':')[0]);
     const endHour = parseInt(bookingInfo.endTime.split(':')[0]);
-    bookingLength = endHour - startHour;
-  }
-
-  // Setup drag source
-  const [{ isDragging }, drag] = useDrag({
+    return endHour - startHour;
+  };
+  
+  // Konfigurera drag-beteende
+  const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.BOOKING_CELL,
-    item: { roomId, hour, day },
+    item: { roomId, day, hour },
     canDrag: !isBooked && !isPastHour,
+    end: (item, monitor) => {
+      const dropResult = monitor.getDropResult();
+      
+      if (!dropResult) return;
+      
+      // Hämta slutposition för draget
+      if (cellRef.current && dragStartY !== null) {
+        const rect = cellRef.current.getBoundingClientRect();
+        const endY = monitor.getClientOffset()?.y || 0;
+        
+        // Beräkna drag-riktning och höjd för att avgöra antalet timmar
+        const dragDistance = endY - dragStartY;
+        const cellHeight = rect.height;
+        
+        // Antal timmar dragits (avrundat)
+        const hoursDragged = Math.round(dragDistance / cellHeight);
+        
+        // Sätt minsta bokning till 1 timme
+        const endHour = hour + Math.max(1, hoursDragged);
+        
+        // Meddela parent-komponenten
+        onDragEnd(roomId, day, hour, endHour);
+      }
+    },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-    end: (item, monitor) => {
-      const dropResult = monitor.getDropResult<{ roomId: number; hour: number; day: Date }>();
-      if (item && dropResult) {
-        // Beräkna starttid (den tidigaste av de två cellerna)
-        const startHour = Math.min(item.hour, dropResult.hour);
-        // Beräkna sluttid (den senaste av de två cellerna + 1)
-        const endHour = Math.max(item.hour, dropResult.hour) + 1;
-        
-        // Anropa callback för att skapa bokning
-        onDragEnd(dropResult.roomId, dropResult.day, startHour, endHour);
-      }
-    },
-  });
-
-  // Setup drop target
-  const [{ isOver, canDrop }, drop] = useDrop({
-    accept: ItemTypes.BOOKING_CELL,
-    canDrop: () => !isBooked && !isPastHour,
-    drop: () => ({ roomId, hour, day }),
-    collect: (monitor) => ({
-      isOver: !!monitor.isOver(),
-      canDrop: !!monitor.canDrop(),
-    }),
-  });
+  }), [roomId, day, hour, isBooked, isPastHour, onDragEnd, dragStartY]);
   
-  // Kombinera drag och drop refs
-  drag(drop(ref));
-  
-  // UI-klasser för drag and drop indikationer
-  const dragDropClasses = !isBooked && !isPastHour
-    ? `${isDragging ? 'opacity-50' : ''} 
-       ${isOver && canDrop ? 'bg-green-100 dark:bg-green-900/20' : ''} 
-       ${!isOver && canDrop ? 'bg-yellow-100 dark:bg-yellow-900/10' : ''}`
-    : '';
-
-  // Hantera tangentbordsnavigering
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      if (!isBooked && !isPastHour) {
-        onCellClick(roomId, day, hour);
-      } else if (isBooked && bookingInfo) {
-        onEditBooking(bookingInfo.id);
-      }
+  // Hantera drag-start för att spara startposition
+  const handleDragStart = (e: React.DragEvent) => {
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect();
+      setDragStartY(e.clientY);
     }
   };
-
+  
+  // Beräkna cell-height baserat på bokningstid
+  const cellHeight = isBooked ? getBookingDuration() * 40 : 40; // 40px höjd per timme
+  
   return (
-    <div 
-      ref={ref}
-      className={`border-t dark:border-dark-600 p-1 h-14 
-        ${isPastHour 
-          ? 'bg-gray-50 dark:bg-dark-700/50' 
-          : isBooked ? '' : 'hover:bg-gray-50 dark:hover:bg-dark-600 cursor-pointer'
-        } 
-        ${dragDropClasses}
-        transition-all duration-200`}
-      style={{ 
-        gridRow: isBooked ? `span ${bookingLength}` : 'auto',
-        opacity: isDragging ? 0.5 : 1,
+    <div
+      ref={(node) => {
+        // Kombinera refs
+        drag(node);
+        if (cellRef) {
+          // @ts-ignore
+          cellRef.current = node;
+        }
       }}
-      onClick={() => !isBooked && !isPastHour ? onCellClick(roomId, day, hour) : null}
-      role="gridcell"
-      aria-label={`Tid ${hour}:00 ${isBooked ? 'Bokad' : 'Tillgänglig'}`}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      aria-grabbed={isBooked && isDragging}
-      aria-dropeffect={!isBooked && !isPastHour ? 'execute' : undefined}
+      className={`
+        relative
+        ${isBooked 
+          ? 'cursor-pointer' 
+          : isPastHour 
+            ? 'cursor-not-allowed' 
+            : 'cursor-grab active:cursor-grabbing hover:bg-primary-50 dark:hover:bg-primary-900/20'
+        }
+        ${isDragging ? 'opacity-50' : 'opacity-100'}
+        border-b dark:border-dark-600
+        ${isPastHour && !isBooked ? 'bg-gray-100 dark:bg-dark-800/70' : 'bg-white dark:bg-dark-700'}
+        transition-all duration-150
+      `}
+      style={{ height: `${cellHeight}px` }}
+      onClick={() => {
+        if (!isBooked && !isPastHour) {
+          onCellClick(roomId, day, hour);
+        }
+      }}
+      onDragStart={handleDragStart}
+      draggable={!isBooked && !isPastHour}
+      aria-disabled={isPastHour}
     >
-      {!isBooked ? (
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {hour}:00
-        </div>
-      ) : (
-        bookingInfo && (hour === parseInt(bookingInfo.startTime.split(':')[0])) && (
-          <div 
-            className={`${getBookingTypeColor(bookingInfo.bookingType)} bg-opacity-10 p-2 rounded-lg shadow-soft h-full overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] transform-gpu border border-l-4 ${getBookingTypeColor(bookingInfo.bookingType)} border-opacity-50 relative`}
-            title={`${bookingInfo.purpose || 'Bokning'} - ${bookingInfo.booker}`}
-            onClick={(e) => {
-              e.stopPropagation(); 
-              onEditBooking(bookingInfo.id);
-            }}
-          >
-            <div className="text-xs font-medium text-primary-800 dark:text-primary-300 mb-1">
-              {formatTime(bookingInfo.startTime)} - {formatTime(bookingInfo.endTime)}
-            </div>
-            <div className="text-xs font-medium truncate text-primary-700 dark:text-primary-400">
-              {bookingInfo.booker}
-            </div>
-            {bookingInfo.purpose && (
-              <div className="text-xs truncate text-primary-600 dark:text-primary-500">
-                {bookingInfo.purpose}
-              </div>
-            )}
-            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteBooking(bookingInfo);
-                }}
-                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 bg-white dark:bg-dark-700 rounded-full p-1 shadow-sm"
-                title="Ta bort bokning"
-                aria-label="Ta bort bokning"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 6h18"></path>
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                </svg>
-              </button>
-            </div>
+      {!isBooked && (
+        <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
+          <div className="text-xs text-gray-400 dark:text-gray-400">
+            {hour}:00
           </div>
-        )
+        </div>
       )}
       
-      {isOver && canDrop && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="p-1 bg-white dark:bg-dark-800 text-xs font-semibold rounded shadow">
-            Släpp för att flytta bokning
+      {isBooked && (
+        <div 
+          className={`absolute top-0 left-0 w-full h-full ${getBookingTypeColor(bookingInfo.bookingType)} bg-opacity-10 dark:bg-opacity-30 border border-l-4 ${getBookingTypeColor(bookingInfo.bookingType).replace('bg-', 'border-')} rounded-sm p-1 overflow-hidden`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditBooking(bookingInfo.id);
+          }}
+        >
+          <div className="text-xs font-medium text-blue-800 dark:text-blue-100 mb-1">
+            {formatTime(bookingInfo.startTime)}-{formatTime(bookingInfo.endTime)}
           </div>
+          
+          <div className="text-xs text-blue-900 dark:text-blue-50 font-medium truncate">
+            {bookingInfo.booker}
+          </div>
+          
+          {bookingInfo.purpose && (
+            <div className="text-xs text-blue-700 dark:text-blue-200 truncate mt-0.5 italic">
+              {bookingInfo.purpose}
+            </div>
+          )}
+          
+          <button
+            className="absolute bottom-1 right-1 text-red-500 dark:text-red-300 hover:text-red-700 dark:hover:text-red-200 p-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteBooking(bookingInfo);
+            }}
+            aria-label="Ta bort bokning"
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

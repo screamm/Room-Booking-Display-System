@@ -1,5 +1,13 @@
 import { supabase } from './supabase';
 
+// Definiera alla rum som ska finnas i systemet
+const DEFAULT_ROOMS = [
+  { name: 'Stora', capacity: 20, features: ['Monitor', 'Whiteboard'] },
+  { name: 'Mellan', capacity: 8, features: ['Videokonferens', 'Whiteboard'] },
+  { name: 'Lilla', capacity: 5, features: ['Videokonferens', 'Whiteboard'] },
+  { name: 'Båset', capacity: 2, features: ['Videokonferens'] },
+];
+
 // Funktion för att skapa tabeller om de inte finns
 export const initializeDatabase = async () => {
   console.log('Initialiserar databasen...');
@@ -26,24 +34,52 @@ export const initializeDatabase = async () => {
     await supabase.rpc('create_bookings_table');
   }
 
-  // Om rumstabellen är tom, lägg till standardrum
-  if (rooms && rooms.length === 0) {
-    console.log('Lägger till standardrum...');
-    
-    const defaultRooms = [
-      { name: 'Stora', capacity: 20, features: ['Monitor', 'Whiteboard'] },
-      { name: 'Mellan', capacity: 8, features: ['Videokonferens', 'Whiteboard'] },
-      { name: 'Lilla', capacity: 5, features: ['Videokonferens', 'Whiteboard'] },
-      { name: 'Båset', capacity: 2, features: ['Videokonferens'] },
-    ];
-    
-    for (const room of defaultRooms) {
-      const { error } = await supabase
+  // Hämta alla befintliga rum
+  const { data: existingRooms, error: fetchError } = await supabase
+    .from('rooms')
+    .select('*');
+
+  if (fetchError) {
+    console.error('Fel vid hämtning av rum:', fetchError);
+    return;
+  }
+
+  // Skapa en map av befintliga rum för snabb lookup
+  const existingRoomMap = new Map(
+    existingRooms?.map(room => [room.name, room]) || []
+  );
+
+  // Kontrollera vilka rum som saknas och lägg till dem
+  for (const defaultRoom of DEFAULT_ROOMS) {
+    if (!existingRoomMap.has(defaultRoom.name)) {
+      console.log(`Lägger till nytt rum: ${defaultRoom.name}`);
+      const { error: insertError } = await supabase
         .from('rooms')
-        .insert([room]);
+        .insert([defaultRoom]);
       
-      if (error) {
-        console.error('Fel vid inläggning av rum:', error);
+      if (insertError) {
+        console.error(`Fel vid inläggning av rum ${defaultRoom.name}:`, insertError);
+      } else {
+        console.log(`Rum "${defaultRoom.name}" tillagt!`);
+      }
+    } else {
+      // Uppdatera befintligt rum om det har ändrats
+      const existingRoom = existingRoomMap.get(defaultRoom.name)!;
+      if (
+        existingRoom.capacity !== defaultRoom.capacity ||
+        JSON.stringify(existingRoom.features) !== JSON.stringify(defaultRoom.features)
+      ) {
+        console.log(`Uppdaterar rum: ${defaultRoom.name}`);
+        const { error: updateError } = await supabase
+          .from('rooms')
+          .update(defaultRoom)
+          .eq('id', existingRoom.id);
+        
+        if (updateError) {
+          console.error(`Fel vid uppdatering av rum ${defaultRoom.name}:`, updateError);
+        } else {
+          console.log(`Rum "${defaultRoom.name}" uppdaterat!`);
+        }
       }
     }
   }

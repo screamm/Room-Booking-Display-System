@@ -38,6 +38,13 @@ const mockOnRecurring = jest.fn();
 describe('ResponsiveBookingForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mocka dagens datum för att göra testet deterministiskt
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2025-03-25'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('bör rendera formuläret korrekt i nytt bokningsläge', () => {
@@ -52,9 +59,9 @@ describe('ResponsiveBookingForm', () => {
 
     // Kontrollera att formuläret har rätt rubriker
     expect(screen.getByText('Ny bokning')).toBeInTheDocument();
-    expect(screen.getByText(/Rum/)).toBeInTheDocument();
-    expect(screen.getByText(/Datum/)).toBeInTheDocument();
-    expect(screen.getByText(/Ditt namn/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Rum/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Datum/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Ditt namn/i)).toBeInTheDocument();
 
     // Kontrollera att formuläret har rätt knappar
     expect(screen.getByRole('button', { name: /Boka rum/i })).toBeInTheDocument();
@@ -144,40 +151,53 @@ describe('ResponsiveBookingForm', () => {
 
   it('bör anropa onSubmit med korrekt data när formuläret skickas', async () => {
     render(
-      <ResponsiveBookingForm
-        rooms={mockRooms}
-        initialData={{ 
-          roomId: 1, 
-          date: '2023-06-10', 
-          startTime: '09:00', 
-          endTime: '10:00',
-          booker: 'Test Person',
-          purpose: 'Projektmöte'
-        }}
-        onSubmit={mockOnSubmit}
-        onCancel={mockOnCancel}
-      />
+      <UserPreferencesProvider>
+        <ResponsiveBookingForm
+          rooms={mockRooms}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          initialValues={{
+            roomId: '',
+            date: '2025-03-25',
+            startTime: '08:00',
+            endTime: '09:00',
+            booker: '',
+            purpose: '',
+            attendees: 1,
+          }}
+        />
+      </UserPreferencesProvider>
     );
 
-    // Välj rum (viktigt för att kunna skicka formuläret)
-    const roomSelect = screen.getByLabelText(/Rum/i);
+    // Välj rum
+    const roomSelect = screen.getByLabelText(/rum/i);
     fireEvent.change(roomSelect, { target: { value: '1' } });
-    
-    // Skicka formuläret
-    fireEvent.click(screen.getByRole('button', { name: /Boka rum/i }));
-    
-    // Kontrollera att onSubmit anropas med rätt data
+
+    // Fyll i namn
+    const nameInput = screen.getByLabelText(/ditt namn/i);
+    fireEvent.change(nameInput, { target: { value: 'Test Person' } });
+
+    // Fyll i syfte
+    const purposeInput = screen.getByLabelText(/syfte/i);
+    fireEvent.change(purposeInput, { target: { value: 'Projektmöte' } });
+
+    // Klicka på skicka-knappen
+    const submitButton = screen.getByRole('button', { name: /boka rum/i });
+    fireEvent.click(submitButton);
+
+    // Vänta på att formuläret ska skickas och kontrollera resultatet
     await waitFor(() => {
-      expect(mockOnSubmit).toHaveBeenCalled();
       expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({
         roomId: 1,
-        date: '2023-06-10',
-        startTime: '09:00',
-        endTime: '10:00',
+        date: '2025-03-25',
+        startTime: '08:00',
+        endTime: '09:00',
         booker: 'Test Person',
-        purpose: 'Projektmöte'
+        purpose: 'Projektmöte',
+        attendees: 1,
+        bookingType: 'meeting',
       }));
-    });
+    }, { timeout: 3000 });
   });
 
   it('bör visa konfliktvarning när det finns överlappande bokningar', async () => {

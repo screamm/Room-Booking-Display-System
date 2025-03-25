@@ -13,7 +13,25 @@ root.render(
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+// Aktivera prestandamätning
+reportWebVitals((metric) => {
+  // Skicka metrics till analytics-tjänst
+  console.log(metric);
+  
+  // Skicka till Supabase för lagring
+  fetch('/api/metrics', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: metric.name,
+      value: metric.value,
+      id: metric.id,
+      delta: metric.delta,
+      entries: metric.entries,
+      navigationType: metric.navigationType,
+      timestamp: new Date().toISOString(),
+    }),
+  }).catch(console.error);
+});

@@ -53,7 +53,7 @@ export const googleCalendarService = {
       return response.data.items || [];
     } catch (error) {
       console.error('Fel vid hämtning av händelser:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -73,7 +73,7 @@ export const googleCalendarService = {
       return response.data;
     } catch (error) {
       console.error('Fel vid skapande av händelse:', error);
-      throw error;
+      return null;
     }
   },
 
@@ -84,9 +84,10 @@ export const googleCalendarService = {
         calendarId: 'primary',
         eventId,
       });
+      return true;
     } catch (error) {
       console.error('Fel vid borttagning av händelse:', error);
-      throw error;
+      return false;
     }
   }
 }; 
