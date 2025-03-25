@@ -313,32 +313,24 @@ export const RoomDisplay: React.FC = () => {
             {currentBooking && (
               <div className="flex justify-between items-center">
                 <div className="text-lg">
-                  {currentBooking.start_time} - {currentBooking.end_time}
+                  {currentBooking.start_time.substring(0, 5)} - {currentBooking.end_time.substring(0, 5)}
                 </div>
                 <div className="text-lg">{currentBooking.purpose || 'Möte'}</div>
-              </div>
-            )}
-            {nextBooking && (
-              <div className="flex justify-between items-center opacity-60">
-                <div className="text-lg">
-                  {nextBooking.start_time} - {nextBooking.end_time}
-                </div>
-                <div className="text-lg">{nextBooking.purpose || 'Möte'}</div>
               </div>
             )}
           </div>
 
           {/* Quick Book Button */}
           {!isOccupied && (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center mt-[-45px]">
               <button
                 onClick={handleQuickBook}
                 disabled={isBooking}
-                className={`group relative px-12 py-6 text-2xl font-bold rounded-xl ${
+                className={`group relative px-16 py-8 text-3xl font-bold rounded-xl ${
                   displayTheme === 'dark'
                     ? 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border-blue-400'
                     : 'bg-cyan-600/20 text-cyan-900 hover:bg-cyan-600/30 border-cyan-400'
-                } border-2 shadow-[0_0_10px_currentColor] transition-all duration-300 ease-in-out transform hover:scale-105`}
+                } border-2 shadow-[0_0_15px_currentColor] transition-all duration-300 ease-in-out transform hover:scale-105`}
               >
                 {/* Knappinnehåll */}
                 <div className="relative z-10">
@@ -358,6 +350,28 @@ export const RoomDisplay: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Nästa konferens */}
+        {nextBooking && (
+          <div className="px-6 pb-4">
+            <div className={`p-3 rounded-lg max-w-[40%] ${
+              displayTheme === 'dark' 
+                ? 'bg-blue-900/20 border border-blue-800/50' 
+                : 'bg-blue-100/50 border border-blue-200'
+            }`}>
+              <div className={`text-xs uppercase font-semibold ${
+                displayTheme === 'dark' ? 'text-blue-400' : 'text-blue-700'
+              }`}>
+                Nästa konferens
+              </div>
+              <div className="flex items-center">
+                <div className="text-base">
+                  {nextBooking.start_time.substring(0, 5)} - {nextBooking.end_time.substring(0, 5)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Status banner */}
         <div className={`w-full p-8 ${

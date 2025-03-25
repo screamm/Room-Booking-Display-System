@@ -1,4 +1,4 @@
-# 🏢 Conference Room Booking System
+# 🏢 Sjobergska RoD - Room Display System
 
 <div align="center">
 
@@ -6,8 +6,9 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0.0-blue.svg)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.3.0-38B2AC.svg)
 ![Supabase](https://img.shields.io/badge/Supabase-Latest-green.svg)
+![PWA](https://img.shields.io/badge/PWA-Enabled-purple.svg)
 
-A modern, responsive conference room booking system with real-time updates and an intuitive interface.
+A modern, responsive room display and booking system with real-time updates, sci-fi inspired UI and Google Calendar integration.
 
 [Features](#features) • [Tech Stack](#tech-stack) • [Getting Started](#getting-started) • [Documentation](#documentation)
 
@@ -19,18 +20,30 @@ A modern, responsive conference room booking system with real-time updates and a
 
 | 🎯 Core Features | 🎨 UI/UX | 🔧 Technical |
 |----------------|----------|-------------|
-| • Real-time booking system | • Dark/Light theme | • TypeScript support |
-| • Emergency booking | • Responsive design | • Supabase integration |
-| • Calendar views | • Modern UI | • Real-time updates |
-| • Room management | • Intuitive interface | • Secure authentication |
+| • Real-time booking system | • Sci-Fi inspired themes | • TypeScript support |
+| • Quick booking functionality | • Responsive design | • Supabase integration |
+| • Google Calendar sync | • Modern interactive UI | • PWA support |
+| • Room display system | • Light/Dark themes | • Real-time updates |
 
 </div>
 
-### 🚀 Emergency Booking
-- One-click booking of the largest available room
-- Automatic time slot detection
-- Instant confirmation dialog
-- Priority booking system
+### 🚀 Quick Booking
+- Instant "beam me up" one-click booking
+- Smart time slot allocation
+- Automatic conflict detection
+- User-friendly confirmation
+
+### 🔄 Google Calendar Integration
+- Two-way sync with Google Calendar
+- Fetch existing meetings
+- Push room bookings to calendar
+- Sync status monitoring
+
+### 📱 Room Display
+- Dedicated display mode for tablets/screens
+- Real-time room availability status
+- Next upcoming meeting info
+- Sci-fi inspired visual design
 
 ## 🛠️ Tech Stack
 
@@ -39,8 +52,8 @@ A modern, responsive conference room booking system with real-time updates and a
 | Frontend | Backend | Styling | Database |
 |----------|---------|---------|----------|
 | React 18 | Supabase | Tailwind CSS | PostgreSQL |
-| TypeScript | REST API | CSS Modules | Row Level Security |
-| Vite | Real-time | Custom Themes | Indexed Queries |
+| TypeScript | REST API | CSS Animations | Row Level Security |
+| Vite | Google API | Responsive Design | Real-time Subscriptions |
 
 </div>
 
@@ -50,15 +63,16 @@ A modern, responsive conference room booking system with real-time updates and a
 - Node.js (v16 or newer)
 - npm or yarn
 - Supabase account
+- Google Developer account (for Calendar integration)
 
 ### Quick Start
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/conference-room-booking.git
+git clone https://github.com/yourusername/Sjobergska_RoD.git
 
 # Navigate to project directory
-cd conference-room-booking
+cd Sjobergska_RoD
 
 # Install dependencies
 npm install
@@ -78,17 +92,23 @@ Create a `.env.local` file in the root directory:
 ```env
 VITE_SUPABASE_URL=your-supabase-url
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
+VITE_GOOGLE_CLIENT_SECRET=your-google-client-secret
+VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
 ```
 
 ### Database Setup
 1. Log in to [Supabase Dashboard](https://app.supabase.com)
 2. Create a new project
 3. Navigate to SQL Editor
-4. Run the setup script:
+4. Run the setup scripts:
 
 ```sql
--- Create tables and set up security policies
--- (See full SQL script in src/scripts/setupDatabase.sql)
+-- Initialize tables and security policies
+-- (See src/scripts/setupDatabase.sql)
+
+-- Set up Google Calendar integration
+-- (See src/scripts/updateDatabaseForGoogleCalendar.sql)
 ```
 
 ## 📚 Documentation
@@ -97,11 +117,15 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 src/
 ├── components/     # React components
+│   ├── RoomDisplay.tsx    # Room display component
+│   └── GoogleCalendarSync.tsx  # Calendar sync component
 ├── contexts/       # React contexts
-├── lib/           # Utility functions
-├── hooks/         # Custom hooks
-├── types/         # TypeScript types
-└── scripts/       # Setup scripts
+├── lib/            # Utility functions
+│   ├── api.ts      # API client for Supabase
+│   └── googleCalendarApi.ts  # Google Calendar integration
+├── hooks/          # Custom hooks
+├── types/          # TypeScript types
+└── scripts/        # Setup scripts
 ```
 
 ### Available Scripts
@@ -113,29 +137,23 @@ npm run preview  # Preview production build
 
 ## 🔒 Security
 
-- Row Level Security (RLS) enabled
-- Secure authentication
-- Protected API endpoints
+- Row Level Security (RLS) with Supabase
+- OAuth2 authentication for Google API
 - Environment variable protection
+- Secure API endpoints
 
 ## 🎨 Customization
 
 ### Themes
-The application supports both dark and light themes. Customize colors in `tailwind.config.js`:
+The application supports both dark and light sci-fi inspired themes. Theme selection is saved per room for a consistent experience.
 
 ```javascript
-module.exports = {
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#f0f9ff',
-          // ... more colors
-        }
-      }
-    }
-  }
-}
+// Example of theme switching in RoomDisplay component
+const toggleTheme = () => {
+  const newTheme = displayTheme === 'light' ? 'dark' : 'light';
+  setDisplayTheme(newTheme);
+  localStorage.setItem(`display_theme_${roomName}`, newTheme);
+};
 ```
 
 ## 🤝 Contributing
@@ -154,9 +172,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-Made with ❤️ by [Your Name]
-
-[![Twitter](https://img.shields.io/badge/Twitter-@yourhandle-blue.svg)](https://twitter.com/yourhandle)
-[![GitHub](https://img.shields.io/badge/GitHub-@yourusername-black.svg)](https://github.com/yourusername)
+Made with ❤️ by Sjobergska Development Team
 
 </div> 
