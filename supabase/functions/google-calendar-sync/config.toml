@@ -1,0 +1,10 @@
+[global]
+runtime = "deno"
+entrypoint = "index.ts"
+
+[global.environment]
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
+GOOGLE_REDIRECT_URI = ""
+SUPABASE_URL = ""
+SUPABASE_SERVICE_ROLE_KEY = "" 

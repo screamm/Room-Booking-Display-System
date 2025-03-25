@@ -1,6 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { roomsApi, bookingsApi } from '../lib/api';
-import type { Room, Booking as DBBooking } from '../types/database.types';
+import type { Room, Booking as DBBooking, BookingType } from '../types/database.types';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmModal from './ConfirmModal';
+import ResponsiveBookingForm from './ResponsiveBookingForm';
+import MobileBookingView from './MobileBookingView';
+import CalendarWidget from './CalendarWidget';
+import SearchAndFilter from './SearchAndFilter';
+import RecurringBookingForm from './RecurringBookingForm';
+import MobileBottomMenu from './MobileBottomMenu';
+import ColorCodingLegend from './ColorCodingLegend';
+import DraggableBookingCell from './DraggableBookingCell';
+import EmergencyBookingButton from './EmergencyBookingButton';
+import GoogleCalendarSync from './GoogleCalendarSync';
+import { format, addDays, startOfWeek, parseISO, isAfter, isBefore, subDays, addWeeks, subWeeks, isSameDay } from 'date-fns';
+import { sv } from 'date-fns/locale';
+import { formatTime } from '../utils/dateUtils';
+import { useUserPreferences } from '../contexts/UserPreferencesContext';
+import ThemeToggle from './ThemeToggle';
 
 // Intern bokningstyp för komponenten
 interface Booking {
@@ -12,27 +31,100 @@ interface Booking {
   endTime: string;
   booker: string;
   purpose: string;
+  bookingType?: BookingType;
 }
 
+// Färgkodning för olika bokningstyper
+const bookingTypeColors = {
+  meeting: 'bg-blue-500',
+  presentation: 'bg-green-500',
+  workshop: 'bg-purple-500',
+  internal: 'bg-amber-500',
+  external: 'bg-red-500'
+};
+
+// Funktion för att få bakgrundsfärg baserat på bokningstyp
+const getBookingTypeColor = (bookingType?: BookingType): string => {
+  if (!bookingType || !bookingTypeColors[bookingType]) {
+    return 'bg-gray-400'; // Standardfärg för odefinierad typ
+  }
+  return bookingTypeColors[bookingType];
+};
+
 const ConferenceRoomBooking: React.FC = () => {
+  // Använd toast-notifikationer
+  const { showToast } = useToast();
+  
   // State för rum, bokningar och formulär
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Legacy state för bakåtkompatibilitet
   const [selectedRoom, setSelectedRoom] = useState<string>('');
   const [bookingDate, setBookingDate] = useState<string>('');
   const [startTime, setStartTime] = useState<string>('');
   const [endTime, setEndTime] = useState<string>('');
   const [booker, setBooker] = useState<string>('');
   const [purpose, setPurpose] = useState<string>('');
-  const [currentView, setCurrentView] = useState<string>('calendar'); // 'calendar', 'form', 'week-view'
+  
+  const [currentView, setCurrentView] = useState<string>(
+    localStorage.getItem('conferenceRoomView') || 'calendar'
+  ); // 'calendar', 'form', 'week-view', 'mobile-view', 'recurring-form'
+  const [previousView, setPreviousView] = useState<string>('calendar'); // För att spara föregående vy
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [weekStart, setWeekStart] = useState<string>(getWeekStartDate(new Date()));
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
+  
+  // State för bekräftelsedialog
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  
+  // State för mobilanpassning
+  const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
+  
+  // State för sök och filter
+  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [searchFilters, setSearchFilters] = useState({
+    searchQuery: '',
+    selectedRooms: [] as number[],
+    selectedFeatures: [] as string[],
+    minCapacity: 0,
+    dateRange: { start: selectedDate, end: null as string | null }
+  });
+  
+  // State för återkommande bokningar
+  const [showRecurringForm, setShowRecurringForm] = useState<boolean>(false);
+  const [recurringBookingData, setRecurringBookingData] = useState<any>(null);
+  
+  // State för ResponsiveBookingForm
+  const [formData, setFormData] = useState({
+    id: null as number | null,
+    roomId: null as number | null,
+    date: selectedDate,
+    startTime: '08:00',
+    endTime: '09:00',
+    booker: '',
+    purpose: '',
+    bookingType: 'meeting' as BookingType | undefined
+  });
 
+  // Ref för tabellkontainern för tangentbordsnavigering
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [focusPosition, setFocusPosition] = useState({ roomIndex: 0, dayIndex: 0, hourIndex: 0 });
+
+  // Lyssna på fönsterstorlek för mobilanpassning
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
   // Ladda rum och bokningar från API
   useEffect(() => {
     async function loadData() {
@@ -50,12 +142,13 @@ const ConferenceRoomBooking: React.FC = () => {
       } catch (err) {
         console.error('Fel vid laddning av data:', err);
         setError('Kunde inte ladda data från servern. Försök igen senare.');
+        showToast('Kunde inte ladda data från servern', 'error');
         setLoading(false);
       }
     }
     
     loadData();
-  }, []);
+  }, [showToast]);
 
   // Ladda bokningar för ett specifikt datum
   useEffect(() => {
@@ -120,6 +213,76 @@ const ConferenceRoomBooking: React.FC = () => {
     setBookingDate(today);
   }, []);
 
+  // Generera arbetstimmar (8-18)
+  const workHours = Array.from({ length: 11 }, (_, i) => i + 8);
+  
+  // Generera veckodagar från startdatum
+  const weekDays = getWeekDays(weekStart);
+
+  // Visa formulär för ny bokning
+  const showBookingForm = (): void => {
+    resetForm();
+    setPreviousView(currentView); // Spara nuvarande vy
+    setCurrentView('form');
+    const today = new Date().toISOString().split('T')[0];
+    setBookingDate(today);
+  };
+
+  // Öppna formulär för att redigera en existerande bokning
+  const handleEditBooking = (id: number): void => {
+    const booking = bookings.find(b => b.id === id);
+    if (booking) {
+      setSelectedRoom(booking.roomId.toString());
+      setBookingDate(booking.date);
+      setStartTime(booking.startTime);
+      setEndTime(booking.endTime);
+      setBooker(booking.booker);
+      setPurpose(booking.purpose || '');
+      setEditingBookingId(booking.id);
+      setFormData({
+        id: booking.id,
+        roomId: booking.roomId,
+        date: booking.date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        booker: booking.booker,
+        purpose: booking.purpose,
+        bookingType: booking.bookingType || 'meeting',
+      });
+      setPreviousView(currentView);
+      setCurrentView('form');
+    }
+  };
+
+  // Hantera klick på en tidscell i kalendern
+  const handleCellClick = (roomId: number, date: Date, hour: number): void => {
+    setSelectedRoom(roomId.toString());
+    setBookingDate(date.toISOString().split('T')[0]);
+    setStartTime(`${hour.toString().padStart(2, '0')}:00`);
+    setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+    setPreviousView(currentView);
+    setCurrentView('form');
+  };
+
+  // Hantera drag-end för att skapa bokning
+  const handleDragEndBooking = (roomId: number, day: Date, startHour: number, endHour: number): void => {
+    // Formatera data för formuläret
+    const date = day.toISOString().split('T')[0];
+    const startTime = `${startHour.toString().padStart(2, '0')}:00`;
+    const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+    
+    // Sätt formulärdata och öppna bokningsformuläret
+    setSelectedRoom(roomId.toString());
+    setBookingDate(date);
+    setStartTime(startTime);
+    setEndTime(endTime);
+    setPreviousView(currentView);
+    setCurrentView('form');
+    
+    // Visa en toast-notifiering
+    showToast('Släpp och dra för att skapa ny bokning!', 'success');
+  };
+
   // Konvertera DB-bokningar till lokal bokningsmodell
   const mapDbBookingsToLocal = (dbBookings: DBBooking[]): Booking[] => {
     return dbBookings.map(booking => {
@@ -134,7 +297,8 @@ const ConferenceRoomBooking: React.FC = () => {
         startTime: booking.start_time,
         endTime: booking.end_time,
         booker: booking.booker,
-        purpose: booking.purpose || ''
+        purpose: booking.purpose || '',
+        bookingType: booking.booking_type || 'meeting',
       };
     });
   };
@@ -147,7 +311,8 @@ const ConferenceRoomBooking: React.FC = () => {
       start_time: booking.startTime,
       end_time: booking.endTime,
       booker: booking.booker,
-      purpose: booking.purpose
+      purpose: booking.purpose,
+      booking_type: booking.bookingType,
     };
   };
 
@@ -169,6 +334,16 @@ const ConferenceRoomBooking: React.FC = () => {
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Justera för att få måndag som första dag
     const monday = new Date(d.setDate(diff));
     return monday.toISOString().split('T')[0];
+  }
+
+  // Funktion för att formatera tid (24h -> mer läsbar)
+  function formatTime(time: string): string {
+    if (!time) return '';
+    
+    const [hours, minutes] = time.split(':');
+    
+    // Returnera som 24-timmarsformat (8:00 istället för 08:00)
+    return `${parseInt(hours)}:${minutes}`;
   }
 
   // Generera veckodagar från startdatum
@@ -304,7 +479,8 @@ const ConferenceRoomBooking: React.FC = () => {
                   startTime: updatedBooking.start_time,
                   endTime: updatedBooking.end_time,
                   booker: updatedBooking.booker,
-                  purpose: updatedBooking.purpose || ''
+                  purpose: updatedBooking.purpose || '',
+                  bookingType: updatedBooking.booking_type || 'meeting',
                 } 
               : booking
           )
@@ -322,7 +498,8 @@ const ConferenceRoomBooking: React.FC = () => {
           startTime: updatedBooking.start_time,
           endTime: updatedBooking.end_time,
           booker: updatedBooking.booker,
-          purpose: updatedBooking.purpose || ''
+          purpose: updatedBooking.purpose || '',
+          bookingType: updatedBooking.booking_type || 'meeting',
         };
         
         setBookings(prevBookings => [...prevBookings, newBooking]);
@@ -330,7 +507,7 @@ const ConferenceRoomBooking: React.FC = () => {
       
       // Återställ formulär
       resetForm();
-      setCurrentView('week-view');
+      updateCurrentView(previousView); // Återgå till föregående vy
     } catch (err) {
       console.error('Fel vid bokning:', err);
       setErrorMessage('Ett fel uppstod vid bokningen. Försök igen senare.');
@@ -353,58 +530,309 @@ const ConferenceRoomBooking: React.FC = () => {
     try {
       await bookingsApi.delete(id);
       setBookings(prevBookings => prevBookings.filter(booking => booking.id !== id));
+      setShowDeleteConfirmation(false);
+      setBookingToDelete(null);
+      
+      // Om vi tar bort i redigeringsläge, återgå till föregående vy
+      if (currentView === 'form' && editingBookingId === id) {
+        updateCurrentView(previousView);
+      }
     } catch (err) {
       console.error(`Fel vid borttagning av bokning med id ${id}:`, err);
       setError('Kunde inte ta bort bokningen. Försök igen senare.');
     }
   };
+  
+  // Visa bekräftelsedialog för borttagning
+  const confirmDeleteBooking = (booking: Booking): void => {
+    setBookingToDelete(booking);
+    setShowDeleteConfirmation(true);
+  };
 
   // Filtera bokningar baserat på datum
-  const filteredBookings = bookings.filter(booking => booking.date === selectedDate);
+  const dateFilteredBookings = bookings.filter(booking => booking.date === selectedDate);
 
   // Gruppera bokningar per rum
   const bookingsByRoom = rooms.map(room => ({
     room,
-    bookings: filteredBookings.filter(booking => booking.roomId === room.id)
+    bookings: dateFilteredBookings.filter(booking => booking.roomId === room.id)
   }));
 
-  // Formatera tid för visning
-  const formatTime = (timeString: string): string => {
-    return timeString.substring(0, 5);
+  // Funktion för att uppdatera aktuell vy och spara i localStorage
+  const updateCurrentView = (view: string): void => {
+    setCurrentView(view);
+    localStorage.setItem('conferenceRoomView', view);
   };
 
-  // Visa formulär för ny bokning
-  const showBookingForm = (): void => {
-    resetForm();
-    setCurrentView('form');
-    const today = new Date().toISOString().split('T')[0];
-    setBookingDate(today);
-  };
-
-  // Öppna formulär för att redigera en existerande bokning
-  const openEditBookingForm = (booking: Booking): void => {
-    setSelectedRoom(booking.roomId.toString());
-    setBookingDate(booking.date);
-    setStartTime(booking.startTime);
-    setEndTime(booking.endTime);
-    setBooker(booking.booker);
-    setPurpose(booking.purpose || '');
-    setEditingBookingId(booking.id);
-    setCurrentView('form');
-  };
-
-  // Hantera klick på en tidscell i kalendern
-  const handleCellClick = (roomId: number, date: Date, hour: number): void => {
-    setSelectedRoom(roomId.toString());
-    setBookingDate(date.toISOString().split('T')[0]);
-    setStartTime(`${hour.toString().padStart(2, '0')}:00`);
-    setEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
-    setCurrentView('form');
+  // Hantera filterändringar
+  const handleFilterChange = useCallback((filters: any) => {
+    setSearchFilters(filters);
+    
+    // Filtrera bokningar baserat på sökfilter
+    let filtered = [...bookings];
+    
+    // Filtrera baserat på datum/datumintervall
+    if (filters.dateRange.start) {
+      if (filters.dateRange.end) {
+        // Datumintervall
+        filtered = filtered.filter(booking => {
+          const bookingDate = new Date(booking.date);
+          const startDate = new Date(filters.dateRange.start);
+          const endDate = new Date(filters.dateRange.end);
+          return bookingDate >= startDate && bookingDate <= endDate;
+        });
+      } else {
+        // Enskilt datum
+        filtered = filtered.filter(booking => booking.date === filters.dateRange.start);
+      }
+    }
+    
+    // Filtrera baserat på rum
+    if (filters.selectedRooms.length > 0) {
+      filtered = filtered.filter(booking => 
+        filters.selectedRooms.includes(booking.roomId)
+      );
+    }
+    
+    // Filtrera baserat på kapacitet
+    if (filters.minCapacity > 0) {
+      filtered = filtered.filter(booking => {
+        const room = rooms.find(r => r.id === booking.roomId);
+        return room && room.capacity >= filters.minCapacity;
+      });
+    }
+    
+    // Filtrera baserat på features
+    if (filters.selectedFeatures.length > 0) {
+      filtered = filtered.filter(booking => {
+        const room = rooms.find(r => r.id === booking.roomId);
+        if (!room) return false;
+        
+        // Kontrollera om rummet har alla valda features
+        return filters.selectedFeatures.every((feature: string) => 
+          room.features.includes(feature)
+        );
+      });
+    }
+    
+    // Filtrera baserat på sökfråga
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      filtered = filtered.filter(booking => 
+        booking.roomName.toLowerCase().includes(query) ||
+        booking.booker.toLowerCase().includes(query) ||
+        (booking.purpose && booking.purpose.toLowerCase().includes(query))
+      );
+    }
+    
+    setFilteredBookings(filtered);
+  }, [bookings, rooms]);
+  
+  // Uppdatera filtrerade bokningar när bookings eller selectedDate ändras
+  useEffect(() => {
+    handleFilterChange({
+      ...searchFilters,
+      dateRange: { start: selectedDate, end: null }
+    });
+  }, [bookings, selectedDate, handleFilterChange]);
+  
+  // Hantera återkommande bokningar
+  const handleShowRecurringForm = () => {
+    setRecurringBookingData({
+      roomId: formData.roomId || parseInt(selectedRoom),
+      date: formData.date || bookingDate,
+      startTime: formData.startTime || startTime,
+      endTime: formData.endTime || endTime,
+      booker: formData.booker || booker,
+      purpose: formData.purpose || purpose
+    });
+    setShowRecurringForm(true);
+    setPreviousView(currentView);
+    updateCurrentView('recurring-form');
   };
   
-  // Generera arbetstimmar (8-18)
-  const workHours = Array.from({ length: 11 }, (_, i) => i + 8);
-  const weekDays = getWeekDays(weekStart);
+  // Skapa flera återkommande bokningar
+  const handleCreateRecurringBookings = async (recurringBookings: any[]) => {
+    try {
+      setLoading(true);
+      let createdCount = 0;
+      
+      for (const bookingData of recurringBookings) {
+        // Kontrollera överlapp för varje bokning
+        const hasOverlap = await bookingsApi.checkOverlap(
+          bookingData.roomId,
+          bookingData.date,
+          bookingData.startTime,
+          bookingData.endTime
+        );
+        
+        if (!hasOverlap) {
+          // Mappa till DB-format
+          const dbBooking = {
+            room_id: bookingData.roomId,
+            date: bookingData.date,
+            start_time: bookingData.startTime,
+            end_time: bookingData.endTime,
+            booker: bookingData.booker,
+            purpose: bookingData.purpose || undefined
+          };
+          
+          // Skapa bokning
+          const createdBooking = await bookingsApi.create(dbBooking);
+          createdCount++;
+          
+          // Hämta rumsnamn
+          const selectedRoomObj = rooms.find(room => room.id === bookingData.roomId);
+          
+          // Lägg till i lokal state
+          if (createdBooking) {
+            const newBooking: Booking = {
+              id: createdBooking.id,
+              roomId: createdBooking.room_id,
+              roomName: selectedRoomObj ? selectedRoomObj.name : 'Okänt rum',
+              date: createdBooking.date,
+              startTime: createdBooking.start_time,
+              endTime: createdBooking.end_time,
+              booker: createdBooking.booker,
+              purpose: createdBooking.purpose || '',
+              bookingType: createdBooking.booking_type || 'meeting',
+            };
+            
+            setBookings(prevBookings => [...prevBookings, newBooking]);
+          }
+        }
+      }
+      
+      setLoading(false);
+      showToast(`${createdCount} återkommande bokningar skapade`, 'success');
+      
+      // Återgå till föregående vy
+      setShowRecurringForm(false);
+      updateCurrentView(previousView);
+      
+    } catch (err) {
+      console.error('Fel vid skapande av återkommande bokningar:', err);
+      showToast('Ett fel uppstod vid skapande av återkommande bokningar', 'error');
+      setLoading(false);
+    }
+  };
+
+  // Renderingslogik för bokningslista
+  const renderBookingsList = () => {
+    const currentDateBookings = filteredBookings.length > 0 
+      ? filteredBookings.filter(b => b.date === selectedDate)
+      : bookings.filter(b => b.date === selectedDate);
+    
+    if (currentDateBookings.length === 0) {
+      return (
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          Inga bokningar för det valda datumet.
+        </div>
+      );
+    }
+    
+    // Sortera bokningar efter starttid
+    const sortedBookings = [...currentDateBookings].sort((a, b) => 
+      a.startTime.localeCompare(b.startTime)
+    );
+    
+    return (
+      <div className="space-y-3">
+        {sortedBookings.map(booking => (
+          <div 
+            key={booking.id} 
+            className={`p-4 rounded-lg shadow-sm cursor-pointer transition-all hover:shadow-md ${getBookingTypeColor(booking.bookingType)} bg-opacity-10 hover:bg-opacity-20 border border-l-4 ${getBookingTypeColor(booking.bookingType).replace('bg-', 'border-')}`}
+            onClick={() => handleEditBooking(booking.id)}
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="font-semibold text-gray-800 dark:text-gray-200">{booking.startTime} - {booking.endTime}</span>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">{booking.roomName}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Bokat av: {booking.booker}</p>
+                {booking.purpose && (
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{booking.purpose}</p>
+                )}
+              </div>
+              <div className="flex flex-col items-end">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${getBookingTypeColor(booking.bookingType)} text-white mb-2`}>
+                  {booking.bookingType && booking.bookingType.charAt(0).toUpperCase() + booking.bookingType.slice(1) || 'Möte'}
+                </span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBookingToDelete(booking);
+                    setShowDeleteConfirmation(true);
+                  }}
+                  className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium"
+                >
+                  Ta bort
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Funktion för att hantera tangentbordsnavigation i rutnätet
+  const handleGridKeyDown = (e: React.KeyboardEvent) => {
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+      return;
+    }
+    
+    e.preventDefault();
+    
+    const roomsCount = rooms.length;
+    const daysCount = 5; // Måndag till fredag
+    const hoursCount = 9; // 8:00 till 17:00
+    
+    let { roomIndex, dayIndex, hourIndex } = focusPosition;
+    
+    switch (e.key) {
+      case 'ArrowUp':
+        hourIndex = Math.max(0, hourIndex - 1);
+        break;
+      case 'ArrowDown':
+        hourIndex = Math.min(hoursCount - 1, hourIndex + 1);
+        break;
+      case 'ArrowLeft':
+        dayIndex = Math.max(0, dayIndex - 1);
+        break;
+      case 'ArrowRight':
+        dayIndex = Math.min(daysCount - 1, dayIndex + 1);
+        break;
+      case 'Home':
+        if (e.ctrlKey) {
+          roomIndex = 0;
+          dayIndex = 0;
+          hourIndex = 0;
+        } else {
+          dayIndex = 0;
+        }
+        break;
+      case 'End':
+        if (e.ctrlKey) {
+          roomIndex = roomsCount - 1;
+          dayIndex = daysCount - 1;
+          hourIndex = hoursCount - 1;
+        } else {
+          dayIndex = daysCount - 1;
+        }
+        break;
+    }
+    
+    setFocusPosition({ roomIndex, dayIndex, hourIndex });
+    
+    // Hitta den relevanta cellen och fokusera på den
+    const grid = gridRef.current;
+    if (grid) {
+      const targetCell = grid.querySelector(`[data-room-index="${roomIndex}"][data-day-index="${dayIndex}"][data-hour-index="${hourIndex}"]`);
+      if (targetCell instanceof HTMLElement) {
+        targetCell.focus();
+      }
+    }
+  };
 
   // Visa laddningsindikator
   if (loading) {
@@ -434,14 +862,21 @@ const ConferenceRoomBooking: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 text-gray-800 dark:text-gray-200">
-      <h1 className="text-3xl font-bold mb-8 text-center text-primary-700 dark:text-primary-300">
-        Sjöbergska Konferensrum
-      </h1>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <h1 className="text-2xl font-bold mb-4 md:mb-0">Konferensrumsbokning</h1>
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+          <GoogleCalendarSync onSyncComplete={() => {
+            // Ladda om bokningar efter synkronisering
+            loadAllBookings();
+          }} />
+          <ThemeToggle />
+        </div>
+      </div>
       
       <div className="flex space-x-2 mb-6">
         <button 
-          onClick={() => setCurrentView('week-view')} 
+          onClick={() => updateCurrentView('week-view')} 
           className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentView === 'week-view' 
             ? 'bg-primary-500 text-white dark:bg-primary-600 shadow-soft' 
             : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600'}`}
@@ -455,7 +890,7 @@ const ConferenceRoomBooking: React.FC = () => {
           </div>
         </button>
         <button 
-          onClick={() => setCurrentView('calendar')} 
+          onClick={() => updateCurrentView('calendar')} 
           className={`px-4 py-2 rounded-lg transition-colors duration-200 ${currentView === 'calendar' 
             ? 'bg-primary-500 text-white dark:bg-primary-600 shadow-soft' 
             : 'bg-white dark:bg-dark-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-dark-600 border border-gray-200 dark:border-dark-600'}`}
@@ -467,245 +902,248 @@ const ConferenceRoomBooking: React.FC = () => {
             Dagsvy
           </div>
         </button>
+        
+        <EmergencyBookingButton onBookingCreated={loadAllBookings} />
       </div>
       
       {currentView === 'week-view' && (
-        <div className="bg-white dark:bg-dark-700 rounded-xl shadow-soft dark:shadow-soft-dark overflow-x-auto">
-          <div className="flex justify-between items-center p-4 border-b dark:border-dark-600">
-            <div className="flex space-x-2">
-              <button 
-                onClick={handlePrevWeek}
-                className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
-                aria-label="Föregående vecka"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button 
-                onClick={handleCurrentWeek}
-                className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 px-3 py-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center gap-2"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-500 dark:text-primary-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                Idag
-              </button>
-              <button 
-                onClick={handleNextWeek}
-                className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
-                aria-label="Nästa vecka"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-            <button 
-              onClick={showBookingForm}
-              className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Ny bokning
-            </button>
-          </div>
-          
-          <div className="min-w-max">
-            <div className="grid grid-cols-8 border-b dark:border-dark-600">
-              <div className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-600"></div>
-              {weekDays.map((day, i) => (
-                <div key={i} className={`p-3 text-center font-medium ${
-                  new Date().toISOString().split('T')[0] === day.toISOString().split('T')[0] 
-                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-b-2 border-primary-500 dark:border-primary-400' 
-                    : 'bg-gray-50 dark:bg-dark-600 text-gray-700 dark:text-gray-300'
-                }`}>
-                  {formatDateHeader(day)}
-                </div>
-              ))}
+        <DndProvider backend={HTML5Backend}>
+          <div className="bg-white dark:bg-dark-700 rounded-xl shadow-soft dark:shadow-soft-dark overflow-x-auto">
+            <div className="flex justify-between items-center p-4 border-b dark:border-dark-600">
+              <div className="flex space-x-2">
+                <button 
+                  onClick={handlePrevWeek}
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
+                  aria-label="Föregående vecka"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <button 
+                  onClick={handleCurrentWeek}
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 px-3 py-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-500 dark:text-primary-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                  </svg>
+                  Idag
+                </button>
+                <button 
+                  onClick={handleNextWeek}
+                  className="bg-white hover:bg-gray-100 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 p-2 rounded-lg border border-gray-200 dark:border-dark-500 transition-all duration-200 flex items-center justify-center"
+                  aria-label="Nästa vecka"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400 italic hidden md:inline">Du kan dra för att boka flera timmar</span>
+                <button 
+                  onClick={showBookingForm}
+                  className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Ny bokning
+                </button>
+              </div>
             </div>
             
-            {rooms.map(room => (
-              <div key={room.id} className="grid grid-cols-8 border-b dark:border-dark-600 hover:bg-gray-50/50 dark:hover:bg-dark-600/50 transition-colors duration-150">
-                <div className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-700 text-primary-700 dark:text-primary-400 flex items-center">
-                  {room.name}
-                </div>
-                {weekDays.map((day, dayIndex) => (
-                  <div key={dayIndex} className="border-r last:border-r-0 dark:border-dark-600">
-                    {workHours.map(hour => {
-                      const isBooked = hasBookingAt(room.id, day, hour);
-                      const bookingInfo = isBooked ? getBookingInfo(room.id, day, hour) : null;
-                      const isPastHour = (new Date() > new Date(day.setHours(hour + 1, 0, 0, 0)));
-                      
-                      // Om denna timme är bokad men förra timmen också var bokad med samma ID, visa inte den här
-                      if (isBooked && hour > 8) {
-                        const prevBooking = getBookingInfo(room.id, day, hour - 1);
-                        if (prevBooking && bookingInfo && prevBooking.id === bookingInfo.id) {
-                          return null;
-                        }
-                      }
-                      
-                      // Beräkna längden på bokningen i timmar
-                      let bookingLength = 1;
-                      if (isBooked && bookingInfo) {
-                        const startHour = parseInt(bookingInfo.startTime.split(':')[0]);
-                        const endHour = parseInt(bookingInfo.endTime.split(':')[0]);
-                        bookingLength = endHour - startHour;
-                      }
-                      
-                      return (
-                        <div 
-                          key={hour} 
-                          className={`border-t dark:border-dark-600 p-1 h-14 ${
-                            isPastHour 
-                              ? 'bg-gray-50 dark:bg-dark-700/50' 
-                              : isBooked ? '' : 'hover:bg-gray-50 dark:hover:bg-dark-600 cursor-pointer'
-                          } transition-all duration-200`}
-                          style={{ 
-                            gridRow: isBooked ? `span ${bookingLength}` : 'auto',
-                          }}
-                          onClick={() => !isBooked && !isPastHour ? handleCellClick(room.id, new Date(day), hour) : null}
-                        >
-                          {!isBooked ? (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {hour}:00
-                            </div>
-                          ) : (
-                            bookingInfo && (hour === parseInt(bookingInfo.startTime.split(':')[0])) && (
-                              <div className="bg-primary-100 dark:bg-primary-900/30 p-2 rounded-lg shadow-soft h-full overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] transform-gpu border border-primary-200 dark:border-primary-800/50" 
-                                   title={`${bookingInfo.purpose || 'Bokning'} - ${bookingInfo.booker}`}
-                                   onClick={() => openEditBookingForm(bookingInfo)}>
-                                <div className="text-xs font-medium text-primary-800 dark:text-primary-300 mb-1">
-                                  {formatTime(bookingInfo.startTime)} - {formatTime(bookingInfo.endTime)}
-                                </div>
-                                <div className="text-xs font-medium truncate text-primary-700 dark:text-primary-400">
-                                  {bookingInfo.booker}
-                                </div>
-                                {bookingInfo.purpose && (
-                                  <div className="text-xs truncate text-primary-600 dark:text-primary-500">
-                                    {bookingInfo.purpose}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          )}
-                        </div>
-                      );
-                    })}
+            <div className="min-w-max">
+              <div className="grid grid-cols-8 border-b dark:border-dark-600" role="row">
+                <div className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-600" role="columnheader"></div>
+                {weekDays.map((day, i) => (
+                  <div 
+                    key={i} 
+                    className={`p-3 text-center font-medium ${
+                      new Date().toISOString().split('T')[0] === day.toISOString().split('T')[0] 
+                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-b-2 border-primary-500 dark:border-primary-400' 
+                        : 'bg-gray-50 dark:bg-dark-600 text-gray-700 dark:text-gray-300'
+                    }`}
+                    role="columnheader"
+                    aria-label={formatDateHeader(day)}
+                  >
+                    {formatDateHeader(day)}
                   </div>
                 ))}
               </div>
-            ))}
+              
+              {rooms.map(room => (
+                <div 
+                  key={room.id} 
+                  className="grid grid-cols-8 border-b dark:border-dark-600 hover:bg-gray-50/50 dark:hover:bg-dark-600/50 transition-colors duration-150"
+                  role="row"
+                >
+                  <div 
+                    className="p-3 font-medium border-r dark:border-dark-600 bg-gray-50 dark:bg-dark-700 text-primary-700 dark:text-primary-400 flex items-center"
+                    role="rowheader"
+                  >
+                    {room.name}
+                  </div>
+                  {weekDays.map((day, dayIndex) => (
+                    <div 
+                      key={dayIndex} 
+                      className="border-r last:border-r-0 dark:border-dark-600"
+                      role="gridcell"
+                    >
+                      {workHours.map(hour => {
+                        const isBooked = hasBookingAt(room.id, day, hour);
+                        const bookingInfo = isBooked ? getBookingInfo(room.id, day, hour) : null;
+                        const isPastHour = (new Date() > new Date(new Date(day).setHours(hour + 1, 0, 0, 0)));
+                        
+                        // Om denna timme är bokad men förra timmen också var bokad med samma ID, visa inte den här
+                        if (isBooked && hour > 8) {
+                          const prevBooking = getBookingInfo(room.id, day, hour - 1);
+                          if (prevBooking && bookingInfo && prevBooking.id === bookingInfo.id) {
+                            return null;
+                          }
+                        }
+                        
+                        return (
+                          <DraggableBookingCell
+                            key={hour}
+                            roomId={room.id}
+                            day={new Date(day)}
+                            hour={hour}
+                            isPastHour={isPastHour}
+                            isBooked={isBooked}
+                            bookingInfo={bookingInfo}
+                            formatTime={formatTime}
+                            onCellClick={handleCellClick}
+                            onEditBooking={handleEditBooking}
+                            onDeleteBooking={confirmDeleteBooking}
+                            onDragEnd={handleDragEndBooking}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </DndProvider>
       )}
       
       {currentView === 'calendar' && (
-        <>
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
-            <div className="flex items-center">
-              <label htmlFor="date-select" className="mr-2 font-medium text-gray-700 dark:text-gray-300">Välj datum:</label>
-              <input 
-                id="date-select"
-                type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border dark:border-dark-500 rounded-lg px-3 py-2 bg-white dark:bg-dark-600 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-600 focus:outline-none transition-shadow duration-200 text-gray-800 dark:text-gray-200" 
-              />
-            </div>
-            <button 
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium text-gray-800 dark:text-gray-200">
+              Bokningar {selectedDate && new Date(selectedDate).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h2>
+            <button
               onClick={showBookingForm}
-              className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
+              className="bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white p-2 rounded-lg transition-all duration-200 shadow-soft"
+              aria-label="Ny bokning"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Ny bokning
+              <div className="flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                <span>Ny bokning</span>
+              </div>
             </button>
           </div>
-
-          <div className="grid grid-cols-1 gap-6">
-            {bookingsByRoom.map(({ room, bookings }) => (
-              <div key={room.id} className="border dark:border-dark-600 rounded-xl p-6 bg-white dark:bg-dark-700 shadow-soft dark:shadow-soft-dark transition-all duration-300 hover:shadow-soft-lg dark:hover:shadow-soft-lg-dark">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-5 gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold">
-                      {room.name.charAt(0)}
+        
+          {/* Visa för stationära enheter */}
+          <div className="hidden md:block">
+            <div className="grid grid-cols-1 gap-6">
+              {bookingsByRoom.map(({ room, bookings }) => (
+                <div key={room.id} className="border dark:border-dark-600 rounded-xl p-6 bg-white dark:bg-dark-700 shadow-soft dark:shadow-soft-dark transition-all duration-300 hover:shadow-soft-lg dark:hover:shadow-soft-lg-dark">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-5 gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold">
+                        {room.name.charAt(0)}
+                      </div>
+                      <h2 className="text-xl font-bold text-primary-700 dark:text-primary-400">
+                        {room.name} 
+                        <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
+                          ({room.capacity} personer)
+                        </span>
+                      </h2>
                     </div>
-                    <h2 className="text-xl font-bold text-primary-700 dark:text-primary-400">
-                      {room.name} 
-                      <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
-                        ({room.capacity} personer)
-                      </span>
-                    </h2>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 flex flex-wrap gap-2">
+                      {room.features.map((feature, index) => (
+                        <span key={index} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-600 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-dark-500">
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 flex flex-wrap gap-2">
-                    {room.features.map((feature, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-dark-600 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-dark-500">
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                
-                {bookings.length > 0 ? (
-                  <ul className="divide-y dark:divide-dark-600">
-                    {bookings
-                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                      .map(booking => (
-                        <li key={booking.id} className="py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 group hover:bg-gray-50 dark:hover:bg-dark-600/50 -mx-4 px-4 rounded-lg transition-colors duration-200">
-                          <div>
-                            <div className="flex items-center gap-3 mb-1">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-300 border border-primary-200 dark:border-primary-800/30">
-                                {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-                              </span>
-                              <span className="font-medium text-gray-800 dark:text-gray-200">{booking.booker}</span>
+                  
+                  {bookings.length > 0 ? (
+                    <ul className="divide-y dark:divide-dark-600">
+                      {bookings
+                        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                        .map(booking => (
+                          <li key={booking.id} className="py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 group hover:bg-gray-50 dark:hover:bg-dark-600/50 -mx-4 px-4 rounded-lg transition-colors duration-200">
+                            <div>
+                              <div className="flex items-center gap-3 mb-1">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-300 border border-primary-200 dark:border-primary-800/30">
+                                  {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+                                </span>
+                                <span className="font-medium text-gray-800 dark:text-gray-200">{booking.booker}</span>
+                              </div>
+                              {booking.purpose && 
+                                <p className="text-sm text-gray-600 dark:text-gray-400 ml-1">{booking.purpose}</p>
+                              }
                             </div>
-                            {booking.purpose && 
-                              <p className="text-sm text-gray-600 dark:text-gray-400 ml-1">{booking.purpose}</p>
-                            }
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => openEditBookingForm(booking)}
-                              className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 20h9"></path>
-                                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                              </svg>
-                              Redigera
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteBooking(booking.id)}
-                              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 6h18"></path>
-                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                              </svg>
-                              Ta bort
-                            </button>
-                          </div>
-                        </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="py-8 text-center border-t dark:border-dark-600">
-                    <div className="mx-auto w-16 h-16 mb-4 text-gray-300 dark:text-gray-600">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleEditBooking(booking.id)}
+                                className="text-primary-500 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 20h9"></path>
+                                  <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                </svg>
+                                Redigera
+                              </button>
+                              <button 
+                                onClick={() => confirmDeleteBooking(booking)}
+                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-200 flex items-center gap-1.5 text-sm opacity-0 group-hover:opacity-100"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 6h18"></path>
+                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                </svg>
+                                Ta bort
+                              </button>
+                            </div>
+                          </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="py-8 text-center border-t dark:border-dark-600">
+                      <div className="mx-auto w-16 h-16 mb-4 text-gray-300 dark:text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500 dark:text-gray-400">Inga bokningar för detta datum</p>
                     </div>
-                    <p className="text-gray-500 dark:text-gray-400">Inga bokningar för detta datum</p>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </>
+          
+          {/* Visa för mobila enheter */}
+          <div className="md:hidden">
+            <MobileBookingView 
+              rooms={rooms}
+              bookings={dateFilteredBookings}
+              selectedDate={selectedDate}
+              onNewBooking={showBookingForm}
+              onEditBooking={handleEditBooking}
+            />
+          </div>
+        </div>
       )}
       
       {currentView === 'form' && (
@@ -809,9 +1247,33 @@ const ConferenceRoomBooking: React.FC = () => {
             </div>
             
             <div className="flex justify-end space-x-4">
+              {editingBookingId && (
+                <button 
+                  type="button" 
+                  onClick={() => confirmDeleteBooking({
+                    id: editingBookingId,
+                    roomId: parseInt(selectedRoom),
+                    roomName: rooms.find(r => r.id === parseInt(selectedRoom))?.name || 'Okänt rum',
+                    date: bookingDate,
+                    startTime,
+                    endTime,
+                    booker,
+                    purpose: purpose || '',
+                    bookingType: bookings.find(b => b.id === editingBookingId)?.bookingType || 'meeting',
+                  })}
+                  className="px-5 py-2.5 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 transition-all duration-200 shadow-sm flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                  </svg>
+                  Ta bort bokning
+                </button>
+              )}
               <button 
                 type="button" 
-                onClick={() => setCurrentView(editingBookingId ? 'calendar' : 'calendar')}
+                onClick={() => updateCurrentView(previousView)}
                 className="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-dark-500 bg-white hover:bg-gray-50 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 transition-all duration-200 shadow-sm"
               >
                 Avbryt
@@ -821,13 +1283,72 @@ const ConferenceRoomBooking: React.FC = () => {
                 className="px-5 py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
                 {editingBookingId ? 'Spara ändringar' : 'Boka rum'}
               </button>
             </div>
           </form>
         </div>
+      )}
+
+      {/* Bekräftelsedialog för borttagning */}
+      {showDeleteConfirmation && bookingToDelete && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-dark-700 rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="text-center mb-4">
+              <div className="mx-auto w-12 h-12 mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">Bekräfta borttagning</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                Är du säker på att du vill ta bort denna bokning?
+              </p>
+              <div className="text-sm text-left bg-gray-50 dark:bg-dark-600 p-3 rounded-lg mb-4">
+                <p><strong>Rum:</strong> {bookingToDelete.roomName}</p>
+                <p><strong>Datum:</strong> {new Date(bookingToDelete.date).toLocaleDateString('sv-SE')}</p>
+                <p><strong>Tid:</strong> {formatTime(bookingToDelete.startTime)} - {formatTime(bookingToDelete.endTime)}</p>
+                <p><strong>Bokad av:</strong> {bookingToDelete.booker}</p>
+                {bookingToDelete.purpose && <p><strong>Syfte:</strong> {bookingToDelete.purpose}</p>}
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowDeleteConfirmation(false)}
+                className="w-1/2 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-dark-500 bg-white hover:bg-gray-50 dark:bg-dark-600 dark:hover:bg-dark-500 dark:text-gray-200 transition-all duration-200 shadow-sm"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={() => handleDeleteBooking(bookingToDelete.id)}
+                className="w-1/2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 text-white font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                </svg>
+                Ta bort
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobil-meny i botten */}
+      {isMobile && (
+        <MobileBottomMenu
+          currentView={currentView}
+          onChangeView={updateCurrentView}
+          onNewBooking={showBookingForm}
+          onEmergencyBooking={() => {
+            // Vi skapar en referens till en ny EmergencyBookingButton för att trigga dess funktion
+            const button = document.querySelector('.emergency-booking-button') as HTMLElement;
+            if (button) button.click();
+          }}
+        />
       )}
     </div>
   );

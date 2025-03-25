@@ -6,6 +6,8 @@ export interface Room {
   created_at?: string;
 }
 
+export type BookingType = 'meeting' | 'presentation' | 'workshop' | 'internal' | 'external';
+
 export interface Booking {
   id: number;
   room_id: number;
@@ -14,6 +16,7 @@ export interface Booking {
   end_time: string;
   booker: string;
   purpose?: string;
+  booking_type?: BookingType;
   created_at?: string;
 }
 
