@@ -35,19 +35,7 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
   // Hämta användarpreferenser
   const { preferences, updatePreferences } = useUserPreferences();
   
-  // Form state
-  const [formData, setFormData] = useState({
-    roomId: initialData.roomId?.toString() || preferences.defaultRoomId?.toString() || '',
-    date: initialData.date || new Date().toISOString().split('T')[0],
-    startTime: initialData.startTime || '08:00',
-    endTime: initialData.endTime || calculateEndTime('08:00', preferences.defaultBookingDuration),
-    booker: initialData.booker || preferences.bookerName || '',
-    purpose: initialData.purpose || '',
-    attendees: initialData.attendees || 1,
-    bookingType: initialData.bookingType || preferences.defaultBookingType as BookingType,
-  });
-
-  // Memoized calculateEndTime function
+  // Memoized calculateEndTime function - flyttad till före användning
   const calculateEndTime = useCallback((startTime: string, durationMinutes: number): string => {
     const [hours, minutes] = startTime.split(':').map(Number);
     
@@ -67,13 +55,28 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
     
     return `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
   }, []);
-
-  // Rekommenderat rum
-  const [suggestedRoom, setSuggestedRoom] = useState<Room | null>(null);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    roomId: initialData.roomId?.toString() || preferences.defaultRoomId?.toString() || '',
+    date: initialData.date || new Date().toISOString().split('T')[0],
+    startTime: initialData.startTime || '08:00',
+    endTime: initialData.endTime || calculateEndTime('08:00', preferences.defaultBookingDuration),
+    booker: initialData.booker || preferences.bookerName || '',
+    purpose: initialData.purpose || '',
+    attendees: initialData.attendees || 1,
+    bookingType: initialData.bookingType || preferences.defaultBookingType as BookingType,
+  });
 
   // Validation state
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [conflictError, setConflictError] = useState<string | null>(null);
+  const [conflictingBookings, setConflictingBookings] = useState<any[]>([]);
+  const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
   
+  // Rekommenderat rum
+  const [suggestedRoom, setSuggestedRoom] = useState<Room | null>(null);
+
   // Memoized availableRooms
   const availableRooms = useMemo(() => {
     return rooms.filter(room => {
@@ -243,11 +246,6 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
     }
   };
 
-  // State för konfliktkontroll
-  const [isCheckingConflicts, setIsCheckingConflicts] = useState<boolean>(false);
-  const [conflictError, setConflictError] = useState<string | null>(null);
-  const [conflictingBookings, setConflictingBookings] = useState<any[]>([]);
-
   // Debounced conflict check
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -267,7 +265,8 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
           const roomId = parseInt(formData.roomId);
           const bookingId = isEditing && initialData.id ? initialData.id : undefined;
           
-          const result = await bookingsApi.checkConflictsInRealtime(
+          // Använd checkOverlap istället för checkConflictsInRealtime
+          const hasConflict = await bookingsApi.checkOverlap(
             roomId,
             formData.date,
             formData.startTime,
@@ -275,9 +274,10 @@ const ResponsiveBookingForm: React.FC<ResponsiveBookingFormProps> = ({
             bookingId
           );
           
-          if (result.hasConflict) {
+          if (hasConflict) {
             setConflictError('Det finns redan en bokning för denna tid');
-            setConflictingBookings(result.conflictingBookings || []);
+            // Vi får inga detaljerade konfliktbokningar från checkOverlap, så vi sätter en tom array
+            setConflictingBookings([]);
           } else {
             setConflictError(null);
             setConflictingBookings([]);

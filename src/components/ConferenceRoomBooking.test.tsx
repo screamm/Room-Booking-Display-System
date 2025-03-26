@@ -7,6 +7,7 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { UserPreferencesProvider } from '../contexts/UserPreferencesContext';
 import { roomsApi, bookingsApi } from '../lib/api';
+import { Booking } from '../types/database.types';
 
 // Mocka API-anrop
 jest.mock('../lib/api', () => ({
@@ -25,11 +26,11 @@ jest.mock('../lib/api', () => ({
 
 describe('ConferenceRoomBooking', () => {
   const mockRooms = [
-    { id: 1, name: 'Rum 1', capacity: 10 },
-    { id: 2, name: 'Rum 2', capacity: 20 },
+    { id: 1, name: 'Rum 1', capacity: 8, features: ['Projektor', 'Whiteboard'] },
+    { id: 2, name: 'Rum 2', capacity: 12, features: ['Projektor', 'Videokonferens'] }
   ];
 
-  const mockBookings = [];
+  const mockBookings: Booking[] = [];
 
   const renderComponent = () => {
     return render(

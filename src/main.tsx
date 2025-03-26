@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import reportWebVitals from './reportWebVitals';
 
 // Förhindra PWA-varningar från att visas i konsollen
 if ('serviceWorker' in navigator) {
@@ -25,4 +26,35 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
-); 
+);
+
+// Aktivera prestandamätning
+reportWebVitals((metric) => {
+  // Logga alltid metrics till konsollen för debugging
+  console.log(metric);
+  
+  // Endast skicka till backend i produktionsmiljö eller om vi har en miljövariabel som aktiverar det
+  const isMetricsEnabled = import.meta.env.VITE_ENABLE_METRICS === 'true';
+  const isProduction = import.meta.env.MODE === 'production';
+  
+  if (isProduction || isMetricsEnabled) {
+    // Skicka till Supabase för lagring med förbättrad felhantering
+    fetch('/api/metrics', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: metric.name,
+        value: metric.value,
+        id: metric.id,
+        delta: metric.delta,
+        entries: metric.entries,
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch((error) => {
+      // Tyst felhantering för att undvika konsolstörningar
+      console.debug('Metrics API not available:', error);
+    });
+  }
+}); 

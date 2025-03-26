@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { calculateEndTime } from '../utils/dateUtils';
+import { BookingType } from '../types/database.types';
 
 interface EmergencyBookingButtonProps {
   onBookingCreated: () => void;
@@ -25,8 +26,8 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       const currentDate = format(now, 'yyyy-MM-dd');
       const currentHour = format(now, 'HH:00');
       
-      // Användarens prefererade längd på bokning, eller 60 minuter som standard
-      const durationMinutes = preferences.defaultBookingDuration || 60;
+      // Begränsa akutbokningar till max 30 minuter
+      const durationMinutes = 30;
       
       // Beräkna sluttid
       const endTime = calculateEndTime(currentHour, durationMinutes / 60);
@@ -40,17 +41,15 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       
       if (!availableRoom) {
         // Inget rum tillgängligt
-        showToast({
-          title: 'Fel: Inga rum tillgängliga',
-          description: 'Det finns inga lediga rum just nu.',
-          status: 'error',
-          duration: 5000
-        });
+        showToast(
+          'Det finns inga lediga rum just nu.',
+          'error'
+        );
         setIsModalOpen(false);
         return;
       }
       
-      // Skapa bokningen
+      // Skapa bokningen med is_quick_booking-flaggan
       const booking = {
         room_id: availableRoom.id,
         date: currentDate,
@@ -58,18 +57,17 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
         end_time: endTime,
         booker: preferences.bookerName || 'Akutbokning',
         purpose: 'Akutbokning',
-        booking_type: 'meeting'
+        booking_type: 'meeting' as BookingType,
+        is_quick_booking: true // Markera som snabbmöte
       };
       
       const createdBooking = await bookingsApi.create(booking);
       
       // Visa bekräftelse
-      showToast({
-        title: 'Akutbokning skapad',
-        description: `Rum ${availableRoom.name} bokat från ${currentHour} till ${endTime}`,
-        status: 'success',
-        duration: 5000
-      });
+      showToast(
+        `Rum ${availableRoom.name} bokat från ${currentHour} till ${endTime}`,
+        'success'
+      );
       
       // Stäng modalen och uppdatera bokningslistan
       setIsModalOpen(false);
@@ -79,12 +77,10 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       console.error('Fel vid akutbokning:', error);
       
       // Visa felmeddelande
-      showToast({
-        title: 'Fel vid akutbokning',
-        description: 'Det gick inte att skapa akutbokningen. Försök igen senare.',
-        status: 'error',
-        duration: 5000
-      });
+      showToast(
+        'Det gick inte att skapa akutbokningen. Försök igen senare.',
+        'error'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +105,7 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
             <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">Bekräfta akutbokning</h2>
             
             <p className="text-gray-700 dark:text-gray-300">
-              Vill du boka ett rum nu? Systemet kommer automatiskt att hitta det största tillgängliga rummet för en bokning på {preferences.defaultBookingDuration || 60} minuter.
+              Vill du boka ett rum nu? Systemet kommer automatiskt att hitta det största tillgängliga rummet för en bokning på {preferences.defaultBookingDuration || 30} minuter.
             </p>
             
             <div className="flex justify-end gap-3 pt-2">

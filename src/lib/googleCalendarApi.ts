@@ -1,93 +1,50 @@
 import { supabase } from './supabase';
-import { google } from '../mocks/googleapis';
 
-// Konfiguration för Google OAuth
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar.events'];
-const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.VITE_GOOGLE_CLIENT_SECRET || '';
-const REDIRECT_URI = process.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:5173/auth/google/callback';
-
-// Skapa OAuth2-klient
-const oauth2Client = new google.auth.OAuth2Client(
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  REDIRECT_URI
-);
-
-// Skapa Google Calendar API-klient
-const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+// Mock för Google Calendar API-integration
+// Faktisk integration kommer att implementeras i framtida version
 
 export const googleCalendarApi = {
-  // Generera URL för OAuth-autentisering
+  // Returnerar en URL som skulle användas för OAuth i en faktisk implementation
   getAuthUrl: () => {
-    return oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: SCOPES,
-      prompt: 'consent'
-    });
+    console.log('getAuthUrl anropad - skulle returnera faktisk URL i produktion');
+    return 'https://example.com/mock-auth-url';
   },
 
-  // Hantera OAuth-callback
+  // Simulerar hantering av OAuth-callback
   handleCallback: async (code: string) => {
-    try {
-      const { tokens } = await oauth2Client.getToken(code);
-      oauth2Client.setCredentials(tokens);
-      return tokens;
-    } catch (error) {
-      console.error('Fel vid hantering av OAuth-callback:', error);
-      throw error;
-    }
+    console.log('handleCallback anropad med kod:', code);
+    return {
+      access_token: 'mock-access-token',
+      refresh_token: 'mock-refresh-token',
+      expiry_date: Date.now() + 3600000
+    };
   },
 
-  // Hämta händelser från Google Kalender
+  // Returnerar tomma händelser istället för att försöka hämta från Google
   getEvents: async (timeMin: string, timeMax: string) => {
-    try {
-      const response = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin,
-        timeMax,
-        singleEvents: true,
-        orderBy: 'startTime',
-      });
-
-      return response.data.items || [];
-    } catch (error) {
-      console.error('Fel vid hämtning av händelser:', error);
-      throw error;
-    }
+    console.log(`getEvents anropad för tidsperiod: ${timeMin} till ${timeMax}`);
+    return [];  // Tom array av händelser
   },
 
-  // Skapa en ny händelse i Google Kalender
+  // Simulerar skapande av en händelse
   createEvent: async (event: {
     summary: string;
     description?: string;
     start: { dateTime: string; timeZone: string };
     end: { dateTime: string; timeZone: string };
   }) => {
-    try {
-      const response = await calendar.events.insert({
-        calendarId: 'primary',
-        requestBody: event,
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Fel vid skapande av händelse:', error);
-      throw error;
-    }
+    console.log('createEvent anropad med:', event);
+    return {
+      id: 'mock-event-id-' + Math.random().toString(36).substring(2, 9),
+      htmlLink: 'https://calendar.google.com/mock-event',
+      ...event
+    };
   },
 
-  // Ta bort en händelse från Google Kalender
+  // Simulerar borttagning av en händelse
   deleteEvent: async (eventId: string) => {
-    try {
-      await calendar.events.delete({
-        calendarId: 'primary',
-        eventId,
-      });
-    } catch (error) {
-      console.error('Fel vid borttagning av händelse:', error);
-      throw error;
-    }
+    console.log('deleteEvent anropad för eventId:', eventId);
+    return true;
   },
 
   // Hämta synkroniseringsstatus

@@ -17,6 +17,7 @@ export interface Booking {
   booker: string;
   purpose?: string;
   booking_type?: BookingType;
+  is_quick_booking?: boolean;
   created_at?: string;
 }
 

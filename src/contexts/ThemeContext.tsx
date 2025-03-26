@@ -19,11 +19,15 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Uppdatera DOM när darkMode ändras
   useEffect(() => {
+    // Forcera DOM-uppdatering på kritiska element
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.body.style.backgroundColor = '#111827'; // Sätt bakgrundsfärg direkt för fallback
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.style.backgroundColor = '#ffffff'; // Sätt bakgrundsfärg direkt för fallback
     }
+    
     // Spara i localStorage
     localStorage.setItem('theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
