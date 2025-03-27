@@ -16,7 +16,8 @@ BEGIN
 END;
 $$;
 
--- Skapa en funktion för att schemalägga synkronisering
+-- Kommentera bort den problematiska koden som beror på cron-schemat
+/*
 CREATE OR REPLACE FUNCTION schedule_google_calendar_sync()
 RETURNS void
 LANGUAGE plpgsql
@@ -38,4 +39,13 @@ END;
 $$;
 
 -- Kör schemaläggningen
-SELECT schedule_google_calendar_sync(); 
+SELECT schedule_google_calendar_sync();
+*/
+
+-- Skapa en tabell för att logga synkroniseringsstatus
+CREATE TABLE IF NOT EXISTS sync_status (
+  id SERIAL PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'not_configured',
+  last_sync TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  error_message TEXT
+); 

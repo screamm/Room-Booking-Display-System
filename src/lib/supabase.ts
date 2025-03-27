@@ -24,18 +24,43 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
       'X-Client-Info': 'supabase-js/2.0.0'
     },
     fetch: (...args) => {
-      console.log('Supabase fetch request:', args[0]);
-      return fetch(...args).then(response => {
+      const url = args[0] as string;
+      const method = args[1]?.method || 'GET';
+      const body = args[1]?.body;
+      
+      console.log('Supabase request:', {
+        url,
+        method,
+        body: body ? JSON.parse(body as string) : undefined,
+        headers: args[1]?.headers
+      });
+      
+      return fetch(...args).then(async response => {
+        const responseData = await response.clone().text().catch(() => '');
+        
         if (!response.ok) {
           console.error('Supabase fetch failed:', {
-            url: args[0], 
+            url, 
+            method,
             status: response.status, 
-            statusText: response.statusText
+            statusText: response.statusText,
+            responseBody: responseData
+          });
+        } else {
+          console.log('Supabase fetch succeeded:', {
+            url,
+            method,
+            status: response.status
           });
         }
         return response;
       }).catch(error => {
-        console.error('Supabase fetch error:', error);
+        console.error('Supabase fetch error:', {
+          url,
+          method,
+          error: error.message,
+          stack: error.stack
+        });
         throw error;
       });
     },

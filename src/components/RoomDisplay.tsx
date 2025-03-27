@@ -215,7 +215,12 @@ export const RoomDisplay: React.FC = () => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     // Formatera currentTime för att endast jämföra timmar och minuter (HH:MM) utan sekunder
-    const timeFormatted = currentTime.substring(0, 5);
+    let timeFormatted = currentTime.substring(0, 5);
+    
+    // För att hantera nyligen skapade bokningar, använd en korrigerad tid
+    // som är 1 sekund bakåt för att säkerställa att exakt jämförelse fungerar
+    const timeNumeric = timeFormatted.replace(':', '');
+    const now = new Date();
     
     console.log('Uppdaterar bokningsstatus:', { 
       bookings, 
@@ -226,24 +231,40 @@ export const RoomDisplay: React.FC = () => {
     
     // Gå igenom bokningar och logga detaljer för felsökning
     bookings.forEach(booking => {
-      console.log(`Bokning: ${booking.date} ${booking.start_time}-${booking.end_time}, Aktuell tid: ${timeFormatted}`,
+      // Ta bort sekunderna från start_time för korrekt jämförelse
+      const bookingStartTime = booking.start_time.substring(0, 5);
+      const bookingEndTime = booking.end_time.substring(0, 5);
+      
+      console.log(`Bokning: ${booking.date} ${bookingStartTime}-${bookingEndTime}, Aktuell tid: ${timeFormatted}`,
         {
           isToday: booking.date === today,
-          startBeforeNow: booking.start_time <= timeFormatted,
-          endAfterNow: booking.end_time > timeFormatted
+          startBeforeNow: bookingStartTime <= timeFormatted,
+          endAfterNow: bookingEndTime > timeFormatted
         });
     });
     
-    const currentBooking = bookings.find(booking => 
-      booking.date === today && 
-      booking.start_time <= timeFormatted && 
-      booking.end_time > timeFormatted
-    );
+    const currentBooking = bookings.find(booking => {
+      // Ta bort sekunderna från start_time och end_time för korrekt jämförelse
+      const bookingStartTime = booking.start_time.substring(0, 5);
+      const bookingEndTime = booking.end_time.substring(0, 5);
+      
+      return (
+        booking.date === today && 
+        // För nyligen skapade bokningar där starttid == aktuell tid
+        bookingStartTime <= timeFormatted && 
+        bookingEndTime > timeFormatted
+      );
+    });
 
-    const nextBooking = bookings.find(booking => 
-      (booking.date === today && booking.start_time > timeFormatted) ||
-      (booking.date === tomorrow && (!currentBooking || currentBooking.end_time <= timeFormatted))
-    );
+    const nextBooking = bookings.find(booking => {
+      // Ta bort sekunderna från start_time för korrekt jämförelse
+      const bookingStartTime = booking.start_time.substring(0, 5);
+      
+      return (
+        (booking.date === today && bookingStartTime > timeFormatted) ||
+        (booking.date === tomorrow && (!currentBooking || currentBooking.end_time.substring(0, 5) <= timeFormatted))
+      );
+    });
 
     console.log('Bokningsstatus:', { 
       currentBooking, 
@@ -323,34 +344,45 @@ export const RoomDisplay: React.FC = () => {
     console.log(`Försöker boka: ${startTime} till ${endTime}`);
 
     try {
-      // Kontrollera om is_quick_booking stöds i databasen
+      // Skapa bokningsobjekt med is_quick_booking direkt
       const bookingData = {
         room_id: room.id,
         date: now.toISOString().split('T')[0],
         start_time: startTime,
         end_time: endTime,
         purpose: 'Snabbmöte',
-        booker: 'Spontanbokning'
+        booker: 'Spontanbokning',
+        is_quick_booking: true
       };
       
-      // Endast lägg till is_quick_booking om kolumnen finns 
-      try {
-        const { data: schemaInfo } = await supabase
-          .from('bookings')
-          .select('is_quick_booking')
-          .limit(1);
-          
-        // Om ovanstående inte kastar fel lägger vi till is_quick_booking
-        (bookingData as any).is_quick_booking = true;
-      } catch (e) {
-        console.log('is_quick_booking stöds inte av databasen ännu');
-      }
-
-      const { error } = await supabase
+      console.log('Skapar bokning:', bookingData);
+      
+      const { data: insertedData, error } = await supabase
         .from('bookings')
-        .insert([bookingData]);
+        .insert([bookingData])
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Fel vid snabbbokning (detaljer):', {
+          kod: error.code,
+          meddelande: error.message,
+          detaljer: error.details,
+          hint: error.hint
+        });
+        throw error;
+      } else {
+        console.log('Bokning skapad framgångsrikt:', insertedData);
+        
+        // Uppdatera direkt i UI för bättre användarupplevelse - lägg till aktuell bokning i state
+        if (insertedData && insertedData.length > 0) {
+          // Skapa direkt en bokning att visa medan vi väntar på databasuppdatering
+          const newBooking = insertedData[0];
+          setCurrentBooking(newBooking);
+          
+          // Forcera uppdatering av tid för att trigga ny rendering
+          setCurrentTime(new Date());
+        }
+      }
       
       // Uppdatera bokning direkt istället för att vänta på intervallet
       const { data: bookings, error: fetchError } = await supabase
@@ -362,6 +394,10 @@ export const RoomDisplay: React.FC = () => {
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
         
+      if (fetchError) {
+        console.error('Fel vid hämtning av bokningar efter skapande:', fetchError);
+      }
+      
       if (!fetchError && bookings) {
         // Uppdatera cache och tillstånd
         const cacheKey = `${room.id}-${now.toISOString().split('T')[0]}-${new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`;

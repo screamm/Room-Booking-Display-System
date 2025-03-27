@@ -94,4 +94,12 @@ async function setupDatabase() {
 }
 
 // Kör skriptet
-setupDatabase(); 
+setupDatabase()
+  .then(() => {
+    console.log('Databas konfigurerad framgångsrikt!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('Ett fel uppstod vid konfigurering av databasen:', error);
+    process.exit(1);
+  }); 
