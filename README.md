@@ -28,22 +28,25 @@ A modern, responsive room display and booking system with real-time updates, sci
 </div>
 
 ### 🚀 Quick Booking
-- Instant "beam me up" one-click booking
+- One-click emergency booking system
 - Smart time slot allocation
 - Automatic conflict detection
-- User-friendly confirmation
+- Real-time availability updates
+- Option to cancel quick bookings directly from the display
 
 ### 🔄 Google Calendar Integration
 - Two-way sync with Google Calendar
 - Fetch existing meetings
 - Push room bookings to calendar
 - Sync status monitoring
+- OAuth2 authentication flow
 
 ### 📱 Room Display
 - Dedicated display mode for tablets/screens
+- Auto-fullscreen capability
 - Real-time room availability status
 - Next upcoming meeting info
-- Sci-fi inspired visual design
+- Quick booking and cancellation interface
 
 ## 🛠️ Tech Stack
 
@@ -53,7 +56,7 @@ A modern, responsive room display and booking system with real-time updates, sci
 |----------|---------|---------|----------|
 | React 18 | Supabase | Tailwind CSS | PostgreSQL |
 | TypeScript | REST API | CSS Animations | Row Level Security |
-| Vite | Google API | Responsive Design | Real-time Subscriptions |
+| Vite | Google API | Dark Mode | Real-time Subscriptions |
 
 </div>
 
@@ -105,10 +108,10 @@ VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
 
 ```sql
 -- Initialize tables and security policies
--- (See src/scripts/setupDatabase.sql)
+-- Run the script from src/scripts/setupDatabase.sql
 
 -- Set up Google Calendar integration
--- (See src/scripts/updateDatabaseForGoogleCalendar.sql)
+-- Run the script from src/scripts/updateDatabaseForGoogleCalendar.sql
 ```
 
 ## 📚 Documentation
@@ -117,22 +120,64 @@ VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
 ```
 src/
 ├── components/     # React components
-│   ├── RoomDisplay.tsx    # Room display component
-│   └── GoogleCalendarSync.tsx  # Calendar sync component
+│   ├── RoomDisplay.tsx            # Room display component
+│   ├── CalendarWidget.tsx         # Calendar widget for date selection
+│   ├── GoogleCalendarSync.tsx     # Calendar sync component
+│   └── ResponsiveBookingForm.tsx  # Booking form component
 ├── contexts/       # React contexts
-├── lib/            # Utility functions
-│   ├── api.ts      # API client for Supabase
-│   └── googleCalendarApi.ts  # Google Calendar integration
+│   ├── ThemeContext.tsx           # Theme management
+│   ├── ToastContext.tsx           # Toast notifications
+│   └── UserPreferencesContext.tsx # User preferences
 ├── hooks/          # Custom hooks
+│   ├── useLocalStorage.ts         # localStorage state management
+│   └── useGoogleCalendar.ts       # Google Calendar integration
+├── lib/            # Utility functions
+│   ├── api.ts                     # API client for Supabase
+│   ├── supabase.ts                # Supabase client
+│   └── googleCalendarApi.ts       # Google Calendar integration
 ├── types/          # TypeScript types
-└── scripts/        # Setup scripts
+│   └── database.types.ts          # Database schema types
+└── utils/          # Utility functions
+    └── dateUtils.ts               # Date and time utilities
+```
+
+### Database Schema
+```sql
+-- Rooms table
+CREATE TABLE rooms (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  capacity INTEGER NOT NULL,
+  features TEXT[] NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Bookings table
+CREATE TABLE bookings (
+  id SERIAL PRIMARY KEY,
+  room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  booker TEXT NOT NULL,
+  purpose TEXT,
+  booking_type TEXT,
+  is_quick_booking BOOLEAN DEFAULT FALSE,
+  google_calendar_id TEXT,
+  last_synced TIMESTAMP WITH TIME ZONE,
+  sync_status TEXT DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT time_check CHECK (start_time < end_time)
+);
 ```
 
 ### Available Scripts
 ```bash
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run preview  # Preview production build
+npm run dev         # Start development server
+npm run build       # Build for production
+npm run preview     # Preview production build
+npm test            # Run tests
+npm run test:watch  # Run tests in watch mode
 ```
 
 ## 🔒 Security
@@ -145,16 +190,20 @@ npm run preview  # Preview production build
 ## 🎨 Customization
 
 ### Themes
-The application supports both dark and light sci-fi inspired themes. Theme selection is saved per room for a consistent experience.
+The application supports both dark and light sci-fi inspired themes. Theme selection is saved in local storage for a consistent experience.
 
 ```javascript
-// Example of theme switching in RoomDisplay component
-const toggleTheme = () => {
-  const newTheme = displayTheme === 'light' ? 'dark' : 'light';
-  setDisplayTheme(newTheme);
-  localStorage.setItem(`display_theme_${roomName}`, newTheme);
-};
+// Example of theme switching
+const { darkMode, toggleDarkMode } = useTheme();
 ```
+
+### User Preferences
+The app stores user preferences to provide a personalized experience:
+
+- Default booking duration
+- Theme preference
+- Preferred room
+- Booker name
 
 ## 🤝 Contributing
 

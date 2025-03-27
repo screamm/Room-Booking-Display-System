@@ -670,7 +670,7 @@ export const RoomDisplay: React.FC = () => {
           
           {/* Nästa konferens - anpassad för olika skärmstorlekar, endast visas om det finns utrymme */}
           {nextBooking && (
-            <div className="mt-auto pt-1 sm:pt-2">
+            <div className="mt-auto pt-1 sm:pt-2 mb-3 sm:mb-4 md:mb-5">
               <div className={`p-2 sm:p-3 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} ${
                 displayTheme === 'dark' 
                   ? 'bg-blue-900/20 border border-blue-800/50' 

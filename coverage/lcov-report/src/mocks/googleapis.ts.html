@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">44.44% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>8/18</span>
+                <span class='fraction'>0/18</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">26.66% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>4/15</span>
+                <span class='fraction'>0/15</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">41.17% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>7/17</span>
+                <span class='fraction'>0/17</span>
             </div>
         
             
@@ -98,18 +98,18 @@
 <a name='L33'></a><a href='#L33'>33</a>
 <a name='L34'></a><a href='#L34'>34</a>
 <a name='L35'></a><a href='#L35'>35</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -118,10 +118,10 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -131,31 +131,31 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span></td><td class="text"><pre class="prettyprint lang-js">// Mock för Google API-biblioteken
-export class OAuth2Client {
-  constructor() {
-    return {
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Mock för Google API-biblioteken
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >export class <span class="cstat-no" title="statement not covered" >O</span></span>Auth2Client </span>{
+<span class="fstat-no" title="function not covered" >  constructor() {</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
       setCredentials: <span class="fstat-no" title="function not covered" >() =&gt; {}</span>,
       getAccessToken: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
       generateAuthUrl: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >'</span>',</span>
       getToken: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
     };
   }
-}
+<span class="cstat-no" title="statement not covered" >}</span>
 &nbsp;
-export const google = {
+export const <span class="cstat-no" title="statement not covered" >google = {</span>
   auth: {
-    GoogleAuth: class {
+    GoogleAuth<span class="fstat-no" title="function not covered" >: c</span>lass {
 <span class="fstat-no" title="function not covered" >      constructor() {</span>
 <span class="cstat-no" title="statement not covered" >        return {</span>
           getClient: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
           authorize: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
         };
       }
-    },
+<span class="cstat-no" title="statement not covered" >    },</span>
     OAuth2Client
   },
-  calendar: () =&gt; ({
+  calendar: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >(</span>{</span>
     events: {
       list: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
       insert: <span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >P</span>romise.reject(new Error('Google Calendar-synkronisering är inte tillgänglig')),</span>
@@ -165,14 +165,14 @@ export const google = {
   }),
 };
 &nbsp;
-export default google; </pre></td></tr></table></pre>
+<span class="cstat-no" title="statement not covered" >export default google; </span></pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-03-25T10:27:10.251Z
+                at 2025-03-27T13:37:17.363Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
