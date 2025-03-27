@@ -592,9 +592,22 @@ export const RoomDisplay: React.FC = () => {
               <div className="flex flex-col w-full">
                 <div className="flex flex-col sm:flex-row justify-between items-center">
                   <div className="text-base md:text-lg mb-2 sm:mb-0">
-                    {currentBooking.start_time.substring(0, 5)} - {currentBooking.end_time.substring(0, 5)}
+                    {currentBooking.purpose || 'Möte'}
                   </div>
-                  <div className="text-base md:text-lg font-medium">{currentBooking.purpose || 'Möte'}</div>
+                </div>
+                
+                {/* Central display för mötestid */}
+                <div className="flex-1 flex items-center justify-center my-8 sm:my-12 md:my-16">
+                  <div className="text-center">
+                    <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-light">
+                      {currentBooking.start_time.substring(0, 5)} - {currentBooking.end_time.substring(0, 5)}
+                    </div>
+                    {currentBooking.booker && (
+                      <div className="text-base mt-3 md:mt-4 text-left">
+                        {currentBooking.booker}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Avbokningsknapp för snabbmöten */}
