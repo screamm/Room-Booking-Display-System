@@ -1,4 +1,4 @@
-# 🏢 Sjobergska RoD - Room Display System
+# 🏢 Room Booking & Display System
 
 <div align="center">
 
@@ -221,6 +221,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-Made with ❤️ by Sjobergska Development Team
+Made with ❤️ for Development by Screamm
 
 </div> 
