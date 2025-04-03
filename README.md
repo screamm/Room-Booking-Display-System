@@ -1,14 +1,14 @@
 <!-- 
-OBS! För att få skärmbilderna att visas korrekt i README-filen:
+NOTE! To correctly display screenshots in the README file:
 
-1. Spara de fyra skärmbilderna från konversationen till din dator
-2. Skapa en mapp 'docs/images' i projektets rot (om den inte redan finns)
-3. Spara bilderna i mappen med följande namn:
-   - Första bilden (ledigt rum): room-display-available.png
-   - Andra bilden (upptaget rum): room-display-occupied.png  
-   - Tredje bilden (veckoöversikt): booking-system-week-view.png
-   - Fjärde bilden (listvy): booking-system-list-view.png
-4. När du har sparat bilderna, ta bort denna kommentar från README.md
+1. Save the four screenshots from the conversation to your computer
+2. Create a 'docs/images' folder in the project root (if it doesn't already exist)
+3. Save the images in the folder with the following names:
+   - First image (available room): room-display-available.png
+   - Second image (occupied room): room-display-occupied.png  
+   - Third image (week view): booking-system-week-view.png
+   - Fourth image (list view): booking-system-list-view.png
+4. When you have saved the images, remove this comment from README.md
 -->
 
 # 🏢 Room Booking & Display System
@@ -23,7 +23,7 @@ OBS! För att få skärmbilderna att visas korrekt i README-filen:
 
 A modern, responsive room display and booking system with real-time updates, sci-fi inspired UI and Google Calendar integration.
 
-[Features](#features) • [Skärmbilder](#skärmbilder) • [Tech Stack](#tech-stack) • [Getting Started](#getting-started) • [Documentation](#documentation)
+[Features](#features) • [Screenshots](#screenshots) • [Tech Stack](#tech-stack) • [Getting Started](#getting-started) • [Documentation](#documentation)
 
 </div>
 
@@ -61,27 +61,27 @@ A modern, responsive room display and booking system with real-time updates, sci
 - Next upcoming meeting info
 - Quick booking and cancellation interface
 
-## 📸 Skärmbilder
+## 📸 Screenshots
 
-Här är några skärmbilder som visar systemets funktionalitet:
+Here are some screenshots showing the system's functionality:
 
 <div align="center">
 
-### Rumsdisplay - Ledigt läge
-<img src="docs/images/room-display-available.png" alt="Rumsdisplay i ledigt läge" width="600" />
-<p><em>En rumsdisplay som visar att rummet är ledigt, med möjlighet till snabbbokning och visar nästa schemalagda möte.</em></p>
+### Room Display - Available Status
+<img src="docs/images/room-display-available.png" alt="Room display in available status" width="600" />
+<p><em>A room display showing that the room is available, with quick booking functionality and display of the next scheduled meeting.</em></p>
 
-### Rumsdisplay - Upptaget läge
-<img src="docs/images/room-display-occupied.png" alt="Rumsdisplay i upptaget läge" width="600" />
-<p><em>En rumsdisplay som visar att rummet är upptaget med information om pågående möte och möjlighet att avboka snabbmöte.</em></p>
+### Room Display - Occupied Status
+<img src="docs/images/room-display-occupied.png" alt="Room display in occupied status" width="600" />
+<p><em>A room display showing that the room is occupied with information about the current meeting and option to cancel quick meetings.</em></p>
 
-### Bokningssystem - Veckoöversikt
-<img src="docs/images/booking-system-week-view.png" alt="Bokningssystem i veckoöversikt" width="800" />
-<p><em>Systemets veckoöversikt för att se alla bokningar i ett rutnät, med möjlighet att skapa nya bokningar och visa befintliga.</em></p>
+### Booking System - Week View
+<img src="docs/images/booking-system-week-view.png" alt="Booking system in week view" width="800" />
+<p><em>The system's week view showing all bookings in a grid layout, with options to create new bookings and view existing ones.</em></p>
 
-### Bokningssystem - Listvy
-<img src="docs/images/booking-system-list-view.png" alt="Bokningssystem i listvy" width="800" />
-<p><em>Listvy över alla rum och deras bokningar för en specifik dag, med detaljerad information om varje bokning.</em></p>
+### Booking System - List View
+<img src="docs/images/booking-system-list-view.png" alt="Booking system in list view" width="800" />
+<p><em>List view of all rooms and their bookings for a specific day, with detailed information about each booking.</em></p>
 
 </div>
 
