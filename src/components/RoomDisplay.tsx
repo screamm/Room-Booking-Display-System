@@ -19,7 +19,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minuter
 
 // Cache för bokningar
 const bookingsCache = new Map<string, { data: Booking[]; timestamp: number }>();
-const BOOKINGS_CACHE_DURATION = 1 * 60 * 1000; // 1 minut
+const BOOKINGS_CACHE_DURATION = 10 * 1000; // 10 sekunder
 
 export const RoomDisplay: React.FC = () => {
   const { roomName: urlRoomName } = useParams<{ roomName: string }>();
