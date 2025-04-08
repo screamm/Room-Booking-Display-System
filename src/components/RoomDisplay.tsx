@@ -523,11 +523,11 @@ export const RoomDisplay: React.FC = () => {
   };
 
   return (
-    <div className={`h-screen w-screen overflow-hidden relative ${
+    <div className="h-screen w-screen overflow-hidden relative ${
       displayTheme === 'dark'
         ? 'bg-gradient-to-br from-[#000428] via-[#001233] to-[#004e92] text-white'
         : 'bg-gradient-to-br from-[#00C6FB] via-[#38EF7D] to-[#72FFB6] text-gray-800'
-    }`}>
+    }">
       {/* Sci-fi overlay pattern */}
       <div className={`absolute inset-0 ${
         displayTheme === 'dark'
@@ -544,19 +544,19 @@ export const RoomDisplay: React.FC = () => {
 
       <div className="h-full w-full flex flex-col relative z-10">
         {/* Header - anpassad för olika skärmstorlekar */}
-        <div className="p-2 sm:p-3 md:p-4 flex flex-col sm:flex-row justify-between items-center sm:items-start gap-2 sm:gap-4">
+        <div className="p-2 sm:p-3 md:p-4 lg:p-6 flex flex-col sm:flex-row justify-between items-center sm:items-start gap-2 sm:gap-4">
           <div className="text-center sm:text-left">
-            <div className="text-xl sm:text-2xl md:text-3xl font-light">
+            <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-light">
               {currentTime.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="text-xs md:text-sm opacity-60">
+            <div className="text-xs md:text-sm lg:text-base xl:text-lg opacity-60">
               {formattedDate}
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4">
             <div className="text-center sm:text-right">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-medium tracking-wide">{room.name}</h1>
-              <div className="text-xs opacity-60">Våning {getRoomFloor(room)}</div>
+              <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-medium tracking-wide">{room.name}</h1>
+              <div className="text-xs md:text-sm lg:text-base xl:text-lg opacity-60">Våning {getRoomFloor(room)}</div>
             </div>
             <button
               onClick={toggleTheme}
@@ -573,7 +573,7 @@ export const RoomDisplay: React.FC = () => {
                 viewBox="0 0 24 24" 
                 strokeWidth="1.5" 
                 stroke="currentColor" 
-                className="w-4 h-4 sm:w-5 sm:h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6"
               >
                 <path 
                   strokeLinecap="round" 
@@ -586,28 +586,28 @@ export const RoomDisplay: React.FC = () => {
         </div>
 
         {/* Content area - flex-grow for dynamic sizing */}
-        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 ${isPortrait ? 'py-2' : 'py-1'}`}>
+        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 lg:px-6 ${isPortrait ? 'py-2' : 'py-1'}`}>
           <div className="w-full">
             {currentBooking && (
               <div className="flex flex-col w-full">
                 <div className="flex flex-col sm:flex-row justify-between items-center">
-                  <div className="text-sm sm:text-base">
+                  <div className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl">
                     {currentBooking.purpose || 'Möte'}
                   </div>
                 </div>
                 
                 {/* Dynamic content area that scales to available space */}
-                <div className="flex-grow flex items-center justify-center my-2 sm:my-3">
+                <div className="flex-grow flex items-center justify-center my-2 sm:my-3 lg:my-4">
                   <div className="text-center">
                     <div className={`${isPortrait 
                       ? 'text-xl sm:text-2xl md:text-3xl' 
-                      : 'text-lg sm:text-xl md:text-2xl lg:text-3xl'} font-light`}>
+                      : 'text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'} font-light`}>
                       {currentBooking.start_time.substring(0, 5)} - {currentBooking.end_time.substring(0, 5)}
                     </div>
                     {currentBooking.booker && (
                       <div className={`${isPortrait 
                         ? 'text-sm sm:text-base' 
-                        : 'text-xs sm:text-sm md:text-base'} mt-1 sm:mt-2 text-left`}>
+                        : 'text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl'} mt-1 sm:mt-2 text-left`}>
                         {currentBooking.booker}
                       </div>
                     )}
@@ -619,13 +619,13 @@ export const RoomDisplay: React.FC = () => {
                   <div className="mt-1 sm:mt-2 flex justify-center">
                     <button
                       onClick={handleCancelQuickMeeting}
-                      className={`px-2 py-1 sm:px-3 sm:py-1 rounded-lg flex items-center gap-1 sm:gap-2 ${
+                      className={`px-2 py-1 sm:px-3 sm:py-1 md:px-4 md:py-2 lg:px-5 lg:py-2 rounded-lg flex items-center gap-1 sm:gap-2 ${
                         displayTheme === 'dark'
                           ? 'bg-red-600/80 hover:bg-red-700 text-white'
                           : 'bg-red-500 hover:bg-red-600 text-white'
-                      } transition-colors text-xs sm:text-sm`}
+                      } transition-colors text-xs sm:text-sm md:text-base lg:text-lg`}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                       Avboka snabbmöte
@@ -636,15 +636,15 @@ export const RoomDisplay: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Book Button - dynamically sized */}
+          {/* Quick Book Button - flyttad uppåt och förstorad */}
           {!isOccupied && (
-            <div className="flex-grow flex items-center justify-center">
+            <div className="flex-grow flex items-center justify-center -mt-10 sm:-mt-12 md:-mt-14 lg:-mt-16">
               <button
                 onClick={handleQuickBook}
                 disabled={isBooking}
                 className={`group relative ${isPortrait 
-                  ? 'px-6 py-4 text-lg sm:text-xl' 
-                  : 'px-4 py-2 sm:px-6 sm:py-3 md:px-8 md:py-4 text-base sm:text-lg md:text-xl'} font-bold rounded-xl ${
+                  ? 'px-8 py-5 text-xl sm:text-2xl' 
+                  : 'px-6 py-3 sm:px-8 sm:py-5 md:px-10 md:py-6 lg:px-12 lg:py-7 text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl'} font-bold rounded-xl ${
                   displayTheme === 'dark'
                     ? 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border-blue-400'
                     : 'bg-cyan-600/20 text-cyan-900 hover:bg-cyan-600/30 border-cyan-400'
@@ -654,7 +654,7 @@ export const RoomDisplay: React.FC = () => {
                 <div className="relative z-10">
                   {isBooking ? (
                     <div className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
@@ -670,24 +670,24 @@ export const RoomDisplay: React.FC = () => {
           
           {/* Nästa konferens - anpassad för olika skärmstorlekar, endast visas om det finns utrymme */}
           {nextBooking && (
-            <div className="mt-auto pt-1 sm:pt-2 mb-3 sm:mb-4 md:mb-5">
-              <div className={`p-2 sm:p-3 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} ${
+            <div className="mt-auto pt-1 sm:pt-2 mb-3 sm:mb-4 md:mb-5 lg:mb-6">
+              <div className={`p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} ${
                 displayTheme === 'dark' 
                   ? 'bg-blue-900/20 border border-blue-800/50' 
                   : 'bg-blue-100/50 border border-blue-200'
               }`}>
-                <div className={`text-xs uppercase font-semibold ${
+                <div className={`text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl uppercase font-semibold ${
                   displayTheme === 'dark' ? 'text-blue-400' : 'text-blue-700'
                 }`}>
                   Nästa konferens
                 </div>
                 <div className="flex items-center">
-                  <div className="text-xs sm:text-sm">
+                  <div className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl">
                     {nextBooking.start_time.substring(0, 5)} - {nextBooking.end_time.substring(0, 5)}
                   </div>
                 </div>
                 {nextBooking.booker && (
-                  <div className={`text-xs mt-0.5 ${
+                  <div className={`text-xs sm:text-sm md:text-base lg:text-base xl:text-lg mt-0.5 ${
                     displayTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                   }`}>
                     {nextBooking.booker}
@@ -699,12 +699,12 @@ export const RoomDisplay: React.FC = () => {
         </div>
 
         {/* Status banner - anpassad för olika skärmstorlekar */}
-        <div className={`w-full p-2 sm:p-3 md:p-4 ${
+        <div className={`w-full p-2 sm:p-3 md:p-4 lg:p-6 ${
           isOccupied
             ? 'bg-gradient-to-r from-red-900 via-red-800 to-red-900 text-white'
             : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-white'
         }`}>
-          <div className="text-white text-center md:text-left text-xl sm:text-2xl md:text-3xl font-medium">
+          <div className="text-white text-center md:text-left text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-medium">
             {isOccupied ? 'UPPTAGET' : 'LEDIGT'}
           </div>
         </div>
