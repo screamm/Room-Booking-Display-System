@@ -582,11 +582,11 @@ export const RoomDisplay: React.FC = () => {
 
   return (
     <div 
-      className="h-screen w-screen overflow-hidden relative ${
+      className={`h-screen w-screen overflow-hidden relative ${
         displayTheme === 'dark'
           ? 'bg-gradient-to-br from-[#000428] via-[#001233] to-[#004e92] text-white'
           : 'bg-gradient-to-br from-[#00C6FB] via-[#38EF7D] to-[#72FFB6] text-gray-800'
-      }"
+      }`}
       onClick={handleManualRefresh}
     >
       {/* Sci-fi overlay pattern */}
