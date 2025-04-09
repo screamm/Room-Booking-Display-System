@@ -80,7 +80,7 @@ Here are some screenshots showing the system's functionality:
 
 | Frontend | Backend | Styling | Database |
 |----------|---------|---------|----------|
-| React 18 | Supabase | Tailwind CSS | PostgreSQL |
+| React 19 | Supabase | Tailwind CSS | PostgreSQL |
 | TypeScript | REST API | CSS Animations | Row Level Security |
 | Vite | Google API | Dark Mode | Real-time Subscriptions |
 
