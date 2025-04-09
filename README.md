@@ -1,21 +1,8 @@
-<!-- 
-NOTE! To correctly display screenshots in the README file:
-
-1. Save the four screenshots from the conversation to your computer
-2. Create a 'docs/images' folder in the project root (if it doesn't already exist)
-3. Save the images in the folder with the following names:
-   - First image (available room): room-display-available.png
-   - Second image (occupied room): room-display-occupied.png  
-   - Third image (week view): booking-system-week-view.png
-   - Fourth image (list view): booking-system-list-view.png
-4. When you have saved the images, remove this comment from README.md
--->
-
 # 🏢 Room Booking & Display System
 
 <div align="center">
 
-![React](https://img.shields.io/badge/React-18.2.0-blue.svg)
+![React](https://img.shields.io/badge/React-19.0.0-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0.0-blue.svg)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.3.0-38B2AC.svg)
 ![Supabase](https://img.shields.io/badge/Supabase-Latest-green.svg)
@@ -46,6 +33,8 @@ A modern, responsive room display and booking system with real-time updates, sci
 - Automatic conflict detection
 - Real-time availability updates
 - Option to cancel quick bookings directly from the display
+- Emergency button for immediate booking of largest available room
+- Quick, automated booking process for urgent meetings
 
 ### 🔄 Google Calendar Integration
 - Two-way sync with Google Calendar
@@ -213,8 +202,15 @@ CREATE TABLE bookings (
 npm run dev         # Start development server
 npm run build       # Build for production
 npm run preview     # Preview production build
+npm run setup-db    # Run database setup script
 npm test            # Run tests
 npm run test:watch  # Run tests in watch mode
+npm run test:coverage # Run tests and generate coverage report
+npm run test:ci     # Run tests in CI environment
+npm run test:db     # Test database connection
+npm run test:db:integrity # Test database data integrity
+npm run test:db:all # Run all database tests
+npm run lint        # Run ESLint
 ```
 
 ## 🔒 Security
