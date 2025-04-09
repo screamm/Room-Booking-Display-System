@@ -43,6 +43,8 @@ A modern, responsive room display and booking system with real-time updates, sci
 - Sync status monitoring
 - OAuth2 authentication flow
 
+> **OBS!** Google Calendar-integrationen är för närvarande under utveckling och inte fullt testad i produktion. Använd med försiktighet.
+
 ### 📱 Room Display
 - Dedicated display mode for tablets/screens
 - Auto-fullscreen capability
@@ -219,6 +221,17 @@ npm run lint        # Run ESLint
 - OAuth2 authentication for Google API
 - Environment variable protection
 - Secure API endpoints
+
+## 📊 Project Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Room Booking | ✅ Stable | Core functionality tested and working |
+| Room Display | ✅ Stable | Core functionality tested and working |
+| Quick Booking | ✅ Stable | Fully implemented with emergency button |
+| Google Calendar Integration | ⚠️ Beta | Under development, not fully tested |
+| Mobile Interface | ✅ Stable | Responsive design implemented |
+| Dark Mode | ✅ Stable | Fully implemented with user preferences |
 
 ## 🎨 Customization
 
