@@ -26,7 +26,19 @@ export const hourToTimeString = (hour: number): string => {
  * @returns Sluttid i formatet "HH:MM"
  */
 export const calculateEndTime = (startTime: string, durationHours: number): string => {
+  console.log(`Beräknar sluttid: ${startTime} + ${durationHours} timmar`);
+
+  if (!startTime || !startTime.includes(':')) {
+    console.error('Ogiltig starttid:', startTime);
+    return '17:00'; // Använd en default sluttid
+  }
+
   const [hours, minutes] = startTime.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) {
+    console.error('Ogiltig tid format:', { hours, minutes });
+    return '17:00';
+  }
+
   let endHours = hours + Math.floor(durationHours);
   let endMinutes = minutes + Math.round((durationHours % 1) * 60);
   
@@ -42,7 +54,10 @@ export const calculateEndTime = (startTime: string, durationHours: number): stri
     endMinutes = 0;
   }
   
-  return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  const result = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  console.log(`Beräknad sluttid: ${result}`);
+  
+  return result;
 };
 
 /**

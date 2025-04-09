@@ -1,0 +1,22 @@
+{
+  "typescript.validate.enable": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "typescript.validate.classMemberUnsorted": true,
+  "typescript.validate.classMethodParameterUnused": true,
+  "typescript.validate.constructorParameterUnused": true,
+  "typescript.validate.destructuringAssignmentUsedBeforeDefined": true,
+  "typescript.validate.emptyBodyFunction": true,
+  "typescript.validate.emptyFunctionWithoutReturnType": true,
+  "typescript.validate.functionDeclarationParameterUnused": true,
+  "typescript.validate.importIsResolved": true,
+  "typescript.validate.forLoopInitializerReferenceUsedBeforeDefined": true,
+
+  // Ignorera specifikt Supabase-funktioner
+  "typescript.validate.ignore": [
+    "**/supabase/functions/**/*.ts"
+  ]
+} 

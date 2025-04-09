@@ -15,11 +15,11 @@ const QUICK_BOOK_PHRASES = [
 
 // Cache för rumdata
 const roomCache = new Map<string, { data: Room | null; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minuter
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minuter
 
 // Cache för bokningar
 const bookingsCache = new Map<string, { data: Booking[]; timestamp: number }>();
-const BOOKINGS_CACHE_DURATION = 10 * 1000; // 10 sekunder
+const BOOKINGS_CACHE_DURATION = 30 * 1000; // 30 sekunder
 
 export const RoomDisplay: React.FC = () => {
   const { roomName: urlRoomName } = useParams<{ roomName: string }>();
@@ -193,7 +193,7 @@ export const RoomDisplay: React.FC = () => {
     };
 
     fetchRoomData();
-    const intervalId = setInterval(fetchBookings, 5 * 60 * 1000); // Uppdatera var 5:e minut
+    const intervalId = setInterval(fetchBookings, 2 * 60 * 1000); // Uppdatera var 2:a minut
     
     // Initial hämtning av bokningar kommer att göras när room är satt
     
@@ -208,6 +208,23 @@ export const RoomDisplay: React.FC = () => {
       fetchBookings();
     }
   }, [room, currentTimeString, fetchBookings]);
+
+  // Funktion för att uppdatera bokningar vid användarinteraktion
+  const handleManualRefresh = () => {
+    if (room) {
+      // Tvinga ny hämtning genom att ignorera cache
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const cacheKey = `${room.id}-${today}-${tomorrow}`;
+      
+      // Ta bort cache för att tvinga en ny hämtning
+      bookingsCache.delete(cacheKey);
+      
+      // Hämta bokningar på nytt
+      fetchBookings();
+    }
+  };
 
   // Memoized function för att uppdatera bokningstillstånd
   const updateBookingStates = useCallback((bookings: Booking[], currentTime: string) => {
@@ -445,6 +462,47 @@ export const RoomDisplay: React.FC = () => {
     }
   };
 
+  // Synkronisera med bokningsapplikationen när användaren returnerar till denna sida
+  useEffect(() => {
+    let lastUpdateTime = 0;
+    const updateCooldown = 10000; // 10 sekunder mellan uppdateringar
+    
+    const debouncedRefresh = () => {
+      const now = Date.now();
+      if (now - lastUpdateTime > updateCooldown) {
+        console.log('Debounced uppdatering triggas');
+        handleManualRefresh();
+        lastUpdateTime = now;
+      } else {
+        console.log('Uppdatering ignoreras, för tätt inpå föregående uppdatering');
+      }
+    };
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && room) {
+        console.log('Användaren återvände till sidan');
+        debouncedRefresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Även lyssna på fokusändringar för webbläsarfönstret
+    const handleFocus = () => {
+      if (room) {
+        console.log('Fönstret fick fokus');
+        debouncedRefresh();
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [room, handleManualRefresh]);
+
   // Auto-fullscreen implementation
   useEffect(() => {
     // Lägger till en auto-fullscreen funktion när sidan laddas
@@ -523,11 +581,14 @@ export const RoomDisplay: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden relative ${
-      displayTheme === 'dark'
-        ? 'bg-gradient-to-br from-[#000428] via-[#001233] to-[#004e92] text-white'
-        : 'bg-gradient-to-br from-[#00C6FB] via-[#38EF7D] to-[#72FFB6] text-gray-800'
-    }">
+    <div 
+      className="h-screen w-screen overflow-hidden relative ${
+        displayTheme === 'dark'
+          ? 'bg-gradient-to-br from-[#000428] via-[#001233] to-[#004e92] text-white'
+          : 'bg-gradient-to-br from-[#00C6FB] via-[#38EF7D] to-[#72FFB6] text-gray-800'
+      }"
+      onClick={handleManualRefresh}
+    >
       {/* Sci-fi overlay pattern */}
       <div className={`absolute inset-0 ${
         displayTheme === 'dark'
@@ -586,7 +647,7 @@ export const RoomDisplay: React.FC = () => {
         </div>
 
         {/* Content area - flex-grow for dynamic sizing */}
-        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 lg:px-6 ${isPortrait ? 'py-2' : 'py-1'}`}>
+        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 lg:px-6 ${isPortrait ? 'py-2' : 'py-1'} pb-[calc(2rem+1.5rem)] sm:pb-[calc(3rem+1.5rem)] md:pb-[calc(4rem+2rem)] lg:pb-[calc(6rem+2rem)]`}>
           <div className="w-full">
             {currentBooking && (
               <div className="flex flex-col w-full">
@@ -670,8 +731,8 @@ export const RoomDisplay: React.FC = () => {
           
           {/* Nästa konferens - anpassad för olika skärmstorlekar, endast visas om det finns utrymme */}
           {nextBooking && (
-            <div className="mt-auto pt-1 sm:pt-2 mb-3 sm:mb-4 md:mb-5 lg:mb-6">
-              <div className={`p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} ${
+            <div className="mt-auto">
+              <div className={`relative p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} bottom-2 sm:bottom-3 md:bottom-4 lg:bottom-6 ${!currentBooking ? 'mb-[-1.9rem]' : ''} ${
                 displayTheme === 'dark' 
                   ? 'bg-blue-900/20 border border-blue-800/50' 
                   : 'bg-blue-100/50 border border-blue-200'
@@ -699,7 +760,7 @@ export const RoomDisplay: React.FC = () => {
         </div>
 
         {/* Status banner - anpassad för olika skärmstorlekar */}
-        <div className={`w-full p-2 sm:p-3 md:p-4 lg:p-6 ${
+        <div className={`w-full p-2 sm:p-3 md:p-4 lg:p-6 absolute bottom-0 left-0 right-0 ${
           isOccupied
             ? 'bg-gradient-to-r from-red-900 via-red-800 to-red-900 text-white'
             : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-600 text-white'

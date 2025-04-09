@@ -10,6 +10,12 @@ jest.mock('../lib/api', () => ({
   bookingsApi: {
     findLargestAvailableRoom: jest.fn(),
     create: jest.fn()
+  },
+  OverlapError: class OverlapError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'OverlapError';
+    }
   }
 }));
 
@@ -59,28 +65,47 @@ describe('EmergencyBookingButton', () => {
     expect(button).toHaveClass('bg-red-500');
   });
 
-  it('ska visa bekräftelsemodal när knappen klickas', () => {
+  it('ska visa bekräftelsemodal när knappen klickas', async () => {
+    // Konfigurera mocks
+    const mockRoom = { id: 1, name: 'Stora rummet', capacity: 20, features: ['Whiteboard'] };
+    (bookingsApi.findLargestAvailableRoom as jest.Mock).mockResolvedValue(mockRoom);
+    
     render(<EmergencyBookingButton onBookingCreated={mockRefreshBookings} />);
     
+    // Klicka på akutbokningsknappen
     fireEvent.click(screen.getByRole('button', { name: /akutbokning/i }));
     
-    expect(screen.getByText('Bekräfta akutbokning')).toBeInTheDocument();
-    expect(screen.getByText(/Vill du boka ett rum nu\?/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /boka nu/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /avbryt/i })).toBeInTheDocument();
+    // Vänta på att modalen visas (efter att API-anropet är klart)
+    await waitFor(() => {
+      expect(screen.getByText('Bekräfta akutbokning')).toBeInTheDocument();
+      expect(screen.getByText(/Vill du boka ett rum nu\?/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /boka nu/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /avbryt/i })).toBeInTheDocument();
+    });
   });
 
-  it('ska stänga modalen när avbryt klickas', () => {
+  it('ska stänga modalen när avbryt klickas', async () => {
+    // Konfigurera mocks
+    const mockRoom = { id: 1, name: 'Stora rummet', capacity: 20, features: ['Whiteboard'] };
+    (bookingsApi.findLargestAvailableRoom as jest.Mock).mockResolvedValue(mockRoom);
+    
     render(<EmergencyBookingButton onBookingCreated={mockRefreshBookings} />);
     
     // Öppna modalen
     fireEvent.click(screen.getByRole('button', { name: /akutbokning/i }));
     
+    // Vänta på att modalen visas
+    await waitFor(() => {
+      expect(screen.getByText('Bekräfta akutbokning')).toBeInTheDocument();
+    });
+    
     // Klicka på avbryt
     fireEvent.click(screen.getByRole('button', { name: /avbryt/i }));
     
     // Kontrollera att modalen är stängd
-    expect(screen.queryByText('Bekräfta akutbokning')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Bekräfta akutbokning')).not.toBeInTheDocument();
+    });
   });
 
   it('ska försöka boka ett rum när bekräfta klickas och ett rum är tillgängligt', async () => {
@@ -102,6 +127,11 @@ describe('EmergencyBookingButton', () => {
     // Öppna modalen
     fireEvent.click(screen.getByRole('button', { name: /akutbokning/i }));
     
+    // Vänta på att modalen visas
+    await waitFor(() => {
+      expect(screen.getByText('Bekräfta akutbokning')).toBeInTheDocument();
+    });
+    
     // Klicka på bekräfta
     fireEvent.click(screen.getByRole('button', { name: /boka nu/i }));
     
@@ -109,12 +139,11 @@ describe('EmergencyBookingButton', () => {
     await waitFor(() => {
       expect(bookingsApi.findLargestAvailableRoom).toHaveBeenCalled();
       expect(bookingsApi.create).toHaveBeenCalled();
-      expect(mockShowToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining('Akutbokning skapad'),
-        })
-      );
       expect(mockRefreshBookings).toHaveBeenCalled();
+      
+      // Kontrollera att framgångsmeddelandet visas
+      const successElement = screen.getByText(/akutbokning av stora rummet lyckades/i, { exact: false });
+      expect(successElement).toBeInTheDocument();
     });
   });
 
@@ -127,19 +156,14 @@ describe('EmergencyBookingButton', () => {
     // Öppna modalen
     fireEvent.click(screen.getByRole('button', { name: /akutbokning/i }));
     
-    // Klicka på bekräfta
-    fireEvent.click(screen.getByRole('button', { name: /boka nu/i }));
-    
     // Vänta på att felmeddelandet visas
     await waitFor(() => {
       expect(bookingsApi.findLargestAvailableRoom).toHaveBeenCalled();
       expect(bookingsApi.create).not.toHaveBeenCalled();
-      expect(mockShowToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining('Fel'),
-          status: 'error'
-        })
-      );
+      
+      // Kontrollera att felmeddelandet visas direkt i komponenten
+      const errorElement = screen.getByText(/tyvärr finns inga lediga rum/i, { exact: false });
+      expect(errorElement).toBeInTheDocument();
     });
   });
 
@@ -152,18 +176,13 @@ describe('EmergencyBookingButton', () => {
     // Öppna modalen
     fireEvent.click(screen.getByRole('button', { name: /akutbokning/i }));
     
-    // Klicka på bekräfta
-    fireEvent.click(screen.getByRole('button', { name: /boka nu/i }));
-    
     // Vänta på att felmeddelandet visas
     await waitFor(() => {
       expect(bookingsApi.findLargestAvailableRoom).toHaveBeenCalled();
-      expect(mockShowToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringContaining('Fel'),
-          status: 'error'
-        })
-      );
+      
+      // Kontrollera att felmeddelandet visas direkt i komponenten
+      const errorElement = screen.getByText(/ett fel uppstod: api-fel/i, { exact: false });
+      expect(errorElement).toBeInTheDocument();
     });
   });
 }); 

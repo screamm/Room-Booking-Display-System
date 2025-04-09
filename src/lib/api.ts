@@ -1,6 +1,35 @@
 import { supabase } from './supabase';
 import type { Room, Booking } from '../types/database.types';
 
+// Custom error klass för överlappande bokningar
+export class OverlapError extends Error {
+  constructor(message: string = 'Bokningen överlappar med en befintlig bokning') {
+    super(message);
+    this.name = 'OverlapError';
+  }
+}
+
+// Hjälpfunktion för att formatera tid för jämförelse
+export function formatTimeForComparison(timeString: string): number {
+  // Omvandla tid från format "HH:MM" till minuter sedan midnatt
+  try {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return hours * 60 + (minutes || 0);
+  } catch (error) {
+    console.error(`Ogiltigt tidsformat: ${timeString}`, error);
+    return 0;
+  }
+}
+
+// Hjälpfunktion för loggning
+const logError = (message: string, error: any) => {
+  console.error(`API ERROR: ${message}`, error);
+  if (error.response) {
+    console.error('Response data:', error.response.data);
+    console.error('Response status:', error.response.status);
+  }
+};
+
 // Rum API
 export const roomsApi = {
   async getAll(): Promise<Room[]> {
@@ -16,7 +45,7 @@ export const roomsApi = {
       
       return data || [];
     } catch (error) {
-      console.error('Fel vid hämtning av rum:', error);
+      logError('Fel vid hämtning av rum:', error);
       throw new Error('Ett oväntat fel uppstod vid hämtning av rum');
     }
   },
@@ -42,7 +71,7 @@ export const roomsApi = {
       
       return data || null;
     } catch (error) {
-      console.error(`Fel vid hämtning av rum med id ${id}:`, error);
+      logError(`Fel vid hämtning av rum med id ${id}:`, error);
       throw error;
     }
   }
@@ -63,7 +92,7 @@ export const bookingsApi = {
       
       return data || [];
     } catch (error) {
-      console.error('Fel vid hämtning av bokningar:', error);
+      logError('Fel vid hämtning av bokningar:', error);
       throw new Error('Ett oväntat fel uppstod vid hämtning av bokningar');
     }
   },
@@ -91,7 +120,7 @@ export const bookingsApi = {
       
       return data || [];
     } catch (error) {
-      console.error(`Fel vid hämtning av bokningar mellan ${startDate} och ${endDate}:`, error);
+      logError(`Fel vid hämtning av bokningar mellan ${startDate} och ${endDate}:`, error);
       throw error;
     }
   },
@@ -114,7 +143,7 @@ export const bookingsApi = {
       
       return data || [];
     } catch (error) {
-      console.error(`Fel vid hämtning av bokningar för datum ${date}:`, error);
+      logError(`Fel vid hämtning av bokningar för datum ${date}:`, error);
       throw error;
     }
   },
@@ -144,7 +173,7 @@ export const bookingsApi = {
       
       return data;
     } catch (error) {
-      console.error('Fel vid skapande av bokning:', error);
+      logError('Fel vid skapande av bokning:', error);
       throw error;
     }
   },
@@ -178,7 +207,7 @@ export const bookingsApi = {
       
       return data;
     } catch (error) {
-      console.error(`Fel vid uppdatering av bokning med id ${id}:`, error);
+      logError(`Fel vid uppdatering av bokning med id ${id}:`, error);
       throw error;
     }
   },
@@ -201,7 +230,7 @@ export const bookingsApi = {
         throw new Error(`Kunde inte ta bort bokning: ${error.message}`);
       }
     } catch (error) {
-      console.error(`Fel vid borttagning av bokning med id ${id}:`, error);
+      logError(`Fel vid borttagning av bokning med id ${id}:`, error);
       throw error;
     }
   },
@@ -221,67 +250,115 @@ export const bookingsApi = {
 
   // Hitta det största lediga rummet för akutbokning
   async findLargestAvailableRoom(date: string, startTime: string, endTime: string): Promise<Room | null> {
-    if (!date || !startTime || !endTime) {
-      throw new Error('Alla obligatoriska fält måste fyllas i för att hitta ledigt rum');
-    }
-
-    if (startTime >= endTime) {
-      throw new Error('Sluttiden måste vara efter starttiden');
-    }
-
+    console.log('%c SÖKER STÖRSTA LEDIGA RUM ', 'background: #0066cc; color: white; font-weight: bold;');
+    console.log('Parametrar:', { date, startTime, endTime });
+    
     try {
-      // 1. Hämta alla rum
-      const { data: rooms, error: roomsError } = await supabase
-        .from('rooms')
-        .select('*')
-        .order('capacity', { ascending: false }); // Sorterar efter kapacitet, störst först
-      
-      if (roomsError) {
-        throw new Error(`Kunde inte hämta rum: ${roomsError.message}`);
+      // Validera indata
+      if (!date || !startTime || !endTime) {
+        console.error('Ogiltiga parametrar - datum eller tid saknas');
+        throw new Error('Datum eller tid saknas för rumsökning');
       }
       
-      if (!rooms || rooms.length === 0) {
-        return null;
+      // Formatera tider för korrekt jämförelse
+      const formattedStartTime = formatTimeForComparison(startTime);
+      const formattedEndTime = formatTimeForComparison(endTime);
+      
+      // Validera att starttid är före sluttid
+      if (formattedStartTime >= formattedEndTime) {
+        console.error('Ogiltig tidsperiod - starttid måste vara före sluttid');
+        throw new Error('Starttid måste vara före sluttid');
       }
       
-      // 2. Hämta alla bokningar för det angivna datumet
-      const { data: bookings, error: bookingsError } = await supabase
+      // Hämta alla rum
+      const roomsResponse = await supabase.from('rooms').select('*');
+      
+      if (roomsResponse.error) {
+        console.error('Fel vid hämtning av rum:', roomsResponse.error);
+        throw new Error(`Kunde inte hämta rum: ${roomsResponse.error.message}`);
+      }
+      
+      const rooms = roomsResponse.data;
+      console.log(`Hittade ${rooms.length} rum totalt`);
+      
+      // Hämta bokningar för det valda datumet
+      const bookingsResponse = await supabase
         .from('bookings')
         .select('*')
         .eq('date', date);
       
-      if (bookingsError) {
-        throw new Error(`Kunde inte hämta bokningar: ${bookingsError.message}`);
+      if (bookingsResponse.error) {
+        console.error('Fel vid hämtning av bokningar:', bookingsResponse.error);
+        throw new Error(`Kunde inte hämta bokningar: ${bookingsResponse.error.message}`);
       }
       
-      // 3. Hitta lediga rum genom att filtrera bort rum med överlappande bokningar
-      for (const room of rooms) {
-        const hasOverlap = bookings?.some(booking => {
-          // Endast kontrollera bokningar för detta rum
-          if (booking.room_id !== room.id) {
-            return false;
+      const bookings = bookingsResponse.data;
+      console.log(`Hittade ${bookings.length} bokningar för datum ${date}`);
+      
+      // Sök efter lediga rum
+      console.log('Söker efter lediga rum...');
+      
+      // För att bättre diagnostisera problem, samla rummen med överlapp
+      const roomsWithOverlap: string[] = [];
+      
+      const availableRooms = rooms.filter(room => {
+        // Hitta bokningar för detta rum
+        const roomBookings = bookings.filter(booking => booking.room_id === room.id);
+        
+        // Kontrollera om det finns överlappande bokningar
+        const hasOverlap = roomBookings.some(booking => {
+          const bookingStartTime = formatTimeForComparison(booking.start_time);
+          const bookingEndTime = formatTimeForComparison(booking.end_time);
+          
+          // Kontrollera överlappning
+          const overlap = (
+            (formattedStartTime < bookingEndTime && formattedEndTime > bookingStartTime) ||
+            (bookingStartTime < formattedEndTime && bookingEndTime > formattedStartTime)
+          );
+          
+          if (overlap) {
+            console.log(`Rum ${room.name} har överlappande bokning ${booking.start_time}-${booking.end_time}`);
+            roomsWithOverlap.push(`${room.name} (${booking.start_time}-${booking.end_time})`);
           }
           
-          const requestedStart = startTime;
-          const requestedEnd = endTime;
-          const bookingStart = booking.start_time;
-          const bookingEnd = booking.end_time;
-          
-          // Korrekt överlappningslogik: 
-          // två tidsintervall överlappar om den ena startar innan den andra slutar
-          // OCH den ena slutar efter att den andra startar
-          return bookingStart < requestedEnd && bookingEnd > requestedStart;
+          return overlap;
         });
         
-        if (!hasOverlap) {
-          return room;
+        return !hasOverlap;
+      });
+      
+      console.log(`Hittade ${availableRooms.length} lediga rum av ${rooms.length} totalt`);
+      
+      if (availableRooms.length === 0) {
+        console.log('Inga lediga rum hittades');
+        
+        if (roomsWithOverlap.length > 0) {
+          console.log('Rum med överlappande bokningar:', roomsWithOverlap);
+          throw new OverlapError(`Alla rum är upptagna för tiden ${startTime}-${endTime}`);
         }
+        
+        return null;
       }
       
-      return null;
+      // Sortera rum efter kapacitet (största först)
+      const sortedRooms = [...availableRooms].sort((a, b) => b.capacity - a.capacity);
+      
+      // Returnera det största rummet
+      const largestRoom = sortedRooms[0];
+      console.log(`Största lediga rum: ${largestRoom.name} (kapacitet: ${largestRoom.capacity})`);
+      
+      return largestRoom;
     } catch (error) {
-      console.error('Fel vid sökning av ledigt rum:', error);
-      throw error;
+      console.error('%c FEL VID SÖKNING AV RUM ', 'background: #c10000; color: white; font-weight: bold;');
+      console.error('Error in findLargestAvailableRoom:', error);
+      
+      // Rethrow OverlapError för att kunna hantera det särskilt i UI
+      if (error instanceof OverlapError) {
+        throw error;
+      }
+      
+      // För andra fel, kasta ett generiskt fel
+      throw new Error(`Kunde inte hitta ledigt rum: ${error instanceof Error ? error.message : 'Okänt fel'}`);
     }
   }
 };
@@ -317,7 +394,7 @@ export const checkOverlap = async (
 
     return data && data.length > 0;
   } catch (error) {
-    console.error('Fel vid kontroll av överlappningar:', error);
+    logError('Fel vid kontroll av överlappningar:', error);
     throw error;
   }
 }; 

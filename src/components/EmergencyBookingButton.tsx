@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { bookingsApi } from '../lib/api';
+import { bookingsApi, OverlapError } from '../lib/api';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 import { useToast } from '../contexts/ToastContext';
 import { format } from 'date-fns';
@@ -8,7 +8,7 @@ import { calculateEndTime } from '../utils/dateUtils';
 import { BookingType } from '../types/database.types';
 
 interface EmergencyBookingButtonProps {
-  onBookingCreated: () => void;
+  onBookingCreated?: () => void;
 }
 
 const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBookingCreated }) => {
@@ -17,35 +17,67 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
   const { showToast } = useToast();
   const { preferences } = useUserPreferences();
 
+  // Funktion för att formatera datum till 'ÅÅÅÅ-MM-DD'
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Funktion för att formatera tid till 'TT:MM'
+  const formatTime = (date: Date): string => {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
   const handleEmergencyBooking = async () => {
     setIsLoading(true);
     
     try {
+      console.log('%c AKUTBOKNING INITIERAD ', 'background: #c10000; color: white; font-weight: bold;');
+      
       // Hämta aktuellt datum och tid
       const now = new Date();
-      const currentDate = format(now, 'yyyy-MM-dd');
-      const currentHour = format(now, 'HH:00');
+      const currentDate = formatDate(now);
       
-      // Begränsa akutbokningar till max 30 minuter
-      const durationMinutes = 30;
+      // Avrunda till närmaste 5 minuter
+      const currentMinutes = now.getMinutes();
+      const roundedMinutes = Math.ceil(currentMinutes / 5) * 5;
       
-      // Beräkna sluttid
-      const endTime = calculateEndTime(currentHour, durationMinutes / 60);
+      now.setMinutes(roundedMinutes, 0, 0);
+      const currentTime = formatTime(now);
+      
+      // Beräkna sluttid (baserat på användarens inställningar eller 30 minuter som standard)
+      const durationMinutes = preferences.defaultBookingDuration || 30;
+      
+      // Beräkna sluttid (60 minuter framåt)
+      const endTime = new Date(now);
+      endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+      const formattedEndTime = formatTime(endTime);
+      
+      console.log('Akutbokning data:', {
+        datum: currentDate,
+        starttid: currentTime,
+        sluttid: formattedEndTime
+      });
       
       // Hitta det största lediga rummet just nu
       const availableRoom = await bookingsApi.findLargestAvailableRoom(
         currentDate,
-        currentHour,
-        endTime
+        currentTime,
+        formattedEndTime
       );
       
       if (!availableRoom) {
-        // Inget rum tillgängligt
+        console.error('Inga lediga rum hittades');
         showToast(
           'Det finns inga lediga rum just nu.',
           'error'
         );
         setIsModalOpen(false);
+        setIsLoading(false);
         return;
       }
       
@@ -53,8 +85,8 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       const booking = {
         room_id: availableRoom.id,
         date: currentDate,
-        start_time: currentHour,
-        end_time: endTime,
+        start_time: currentTime,
+        end_time: formattedEndTime,
         booker: preferences.bookerName || 'Akutbokning',
         purpose: 'Akutbokning',
         booking_type: 'meeting' as BookingType,
@@ -65,22 +97,33 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       
       // Visa bekräftelse
       showToast(
-        `Rum ${availableRoom.name} bokat från ${currentHour} till ${endTime}`,
+        `Rum ${availableRoom.name} bokat från ${currentTime} till ${formattedEndTime}`,
         'success'
       );
       
       // Stäng modalen och uppdatera bokningslistan
       setIsModalOpen(false);
-      onBookingCreated();
+      
+      // Anropa callback för att uppdatera bokningslistan om den finns
+      if (onBookingCreated) {
+        onBookingCreated();
+      }
       
     } catch (error) {
       console.error('Fel vid akutbokning:', error);
       
-      // Visa felmeddelande
-      showToast(
-        'Det gick inte att skapa akutbokningen. Försök igen senare.',
-        'error'
-      );
+      // Hantera specifika feltyper
+      if (error instanceof OverlapError) {
+        showToast(
+          'Alla rum är redan bokade under denna tid. Försök senare eller välj en annan tid.',
+          'error'
+        );
+      } else {
+        showToast(
+          'Det gick inte att skapa akutbokningen. Försök igen senare.',
+          'error'
+        );
+      }
     } finally {
       setIsLoading(false);
     }

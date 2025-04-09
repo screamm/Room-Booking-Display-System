@@ -32,6 +32,7 @@ interface Booking {
   booker: string;
   purpose: string;
   bookingType?: BookingType;
+  is_quick_booking: boolean;
 }
 
 // Färgkodning för olika bokningstyper
@@ -150,62 +151,83 @@ const ConferenceRoomBooking: React.FC = () => {
     loadData();
   }, [showToast]);
 
+  // Konvertera DB-bokningar till lokal bokningsmodell
+  const mapDbBookingsToLocal = useCallback((dbBookings: DBBooking[]): Booking[] => {
+    return dbBookings.map(booking => {
+      // Hitta rumsnamnet baserat på room_id
+      const room = rooms.find(r => r.id === booking.room_id);
+      
+      return {
+        id: booking.id,
+        roomId: booking.room_id,
+        roomName: room ? room.name : 'Okänt rum',
+        date: booking.date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        booker: booking.booker,
+        purpose: booking.purpose || '',
+        bookingType: booking.booking_type || 'meeting',
+        is_quick_booking: booking.is_quick_booking || false,
+      };
+    });
+  }, [rooms]);
+
   // Ladda bokningar för ett specifikt datum
-  useEffect(() => {
-    async function loadBookingsForDate() {
-      try {
-        if (!selectedDate) return;
-        
-        const bookingsData = await bookingsApi.getByDate(selectedDate);
-        const mappedBookings = mapDbBookingsToLocal(bookingsData);
-        
-        setBookings(prevBookings => {
-          // Ta bort bokningar för det valda datumet och lägg till de nya
-          const otherDatesBookings = prevBookings.filter(b => b.date !== selectedDate);
-          return [...otherDatesBookings, ...mappedBookings];
-        });
-      } catch (err) {
-        console.error(`Fel vid laddning av bokningar för datum ${selectedDate}:`, err);
-        setError('Kunde inte ladda bokningar för det valda datumet.');
-      }
+  const loadBookingsForDate = useCallback(async () => {
+    try {
+      if (!selectedDate) return;
+      
+      const bookingsData = await bookingsApi.getByDate(selectedDate);
+      const mappedBookings = mapDbBookingsToLocal(bookingsData);
+      
+      setBookings(prevBookings => {
+        // Ta bort bokningar för det valda datumet och lägg till de nya
+        const otherDatesBookings = prevBookings.filter(b => b.date !== selectedDate);
+        return [...otherDatesBookings, ...mappedBookings];
+      });
+    } catch (err) {
+      console.error(`Fel vid laddning av bokningar för datum ${selectedDate}:`, err);
+      setError('Kunde inte ladda bokningar för det valda datumet.');
     }
-    
+  }, [selectedDate, mapDbBookingsToLocal]);
+
+  useEffect(() => {
     loadBookingsForDate();
-  }, [selectedDate]);
+  }, [selectedDate, loadBookingsForDate]);
 
   // Ladda bokningar för veckan när veckostart ändras
-  useEffect(() => {
-    async function loadBookingsForWeek() {
-      try {
-        const endDate = new Date(weekStart);
-        endDate.setDate(endDate.getDate() + 6);
-        
-        const bookingsData = await bookingsApi.getByDateRange(
-          weekStart, 
-          endDate.toISOString().split('T')[0]
-        );
-        
-        const mappedBookings = mapDbBookingsToLocal(bookingsData);
-        
-        setBookings(prevBookings => {
-          // Filtrera bort bokningar som ingår i veckointervallet
-          const otherBookings = prevBookings.filter(b => {
-            const bookingDate = new Date(b.date);
-            const startDate = new Date(weekStart);
-            const endWeekDate = new Date(endDate);
-            return bookingDate < startDate || bookingDate > endWeekDate;
-          });
-          
-          return [...otherBookings, ...mappedBookings];
+  const loadBookingsForWeek = useCallback(async () => {
+    try {
+      const endDate = new Date(weekStart);
+      endDate.setDate(endDate.getDate() + 6);
+      
+      const bookingsData = await bookingsApi.getByDateRange(
+        weekStart, 
+        endDate.toISOString().split('T')[0]
+      );
+      
+      const mappedBookings = mapDbBookingsToLocal(bookingsData);
+      
+      setBookings(prevBookings => {
+        // Filtrera bort bokningar som ingår i veckointervallet
+        const otherBookings = prevBookings.filter(b => {
+          const bookingDate = new Date(b.date);
+          const startDate = new Date(weekStart);
+          const endWeekDate = new Date(endDate);
+          return bookingDate < startDate || bookingDate > endWeekDate;
         });
-      } catch (err) {
-        console.error(`Fel vid laddning av bokningar för veckan från ${weekStart}:`, err);
-        setError('Kunde inte ladda bokningar för veckan.');
-      }
+        
+        return [...otherBookings, ...mappedBookings];
+      });
+    } catch (err) {
+      console.error(`Fel vid laddning av bokningar för veckan från ${weekStart}:`, err);
+      setError('Kunde inte ladda bokningar för veckan.');
     }
-    
+  }, [weekStart, mapDbBookingsToLocal]);
+
+  useEffect(() => {
     loadBookingsForWeek();
-  }, [weekStart]);
+  }, [weekStart, loadBookingsForWeek]);
 
   // Dagens datum som default för bokningsformuläret
   useEffect(() => {
@@ -281,26 +303,6 @@ const ConferenceRoomBooking: React.FC = () => {
     
     // Visa en toast-notifiering
     showToast('Släpp och dra för att skapa ny bokning!', 'success');
-  };
-
-  // Konvertera DB-bokningar till lokal bokningsmodell
-  const mapDbBookingsToLocal = (dbBookings: DBBooking[]): Booking[] => {
-    return dbBookings.map(booking => {
-      // Hitta rumsnamnet baserat på room_id
-      const room = rooms.find(r => r.id === booking.room_id);
-      
-      return {
-        id: booking.id,
-        roomId: booking.room_id,
-        roomName: room ? room.name : 'Okänt rum',
-        date: booking.date,
-        startTime: booking.start_time,
-        endTime: booking.end_time,
-        booker: booking.booker,
-        purpose: booking.purpose || '',
-        bookingType: booking.booking_type || 'meeting',
-      };
-    });
   };
 
   // Konvertera lokal bokning till DB-format
@@ -410,6 +412,53 @@ const ConferenceRoomBooking: React.FC = () => {
     setWeekStart(getWeekStartDate(new Date()));
   }
 
+  // Funktion för att uppdatera aktuell vy
+  const refreshCurrentView = useCallback(() => {
+    console.log("Uppdaterar vyn efter bokningsändring:", currentView);
+    if (currentView === 'week-view') {
+      loadBookingsForWeek();
+    } else if (currentView === 'calendar' || currentView === 'list') {
+      loadBookingsForDate();
+    }
+  }, [currentView, loadBookingsForWeek, loadBookingsForDate]);
+
+  // Uppdatera vyn när användaren återvänder till sidan eller får fokus
+  useEffect(() => {
+    let lastUpdateTime = 0;
+    const updateCooldown = 5000; // 5 sekunder mellan uppdateringar
+    
+    const debouncedRefresh = () => {
+      const now = Date.now();
+      if (now - lastUpdateTime > updateCooldown) {
+        console.log('Auto-uppdatering av bokning triggas');
+        refreshCurrentView();
+        lastUpdateTime = now;
+      } else {
+        console.log('Uppdatering ignoreras, för tätt inpå föregående uppdatering');
+      }
+    };
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Användaren återvände till sidan');
+        debouncedRefresh();
+      }
+    };
+
+    const handleFocus = () => {
+      console.log('Fönstret fick fokus');
+      debouncedRefresh();
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [refreshCurrentView]);
+
   // Hantera bokning
   const handleBookingSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -481,6 +530,7 @@ const ConferenceRoomBooking: React.FC = () => {
                   booker: updatedBooking.booker,
                   purpose: updatedBooking.purpose || '',
                   bookingType: updatedBooking.booking_type || 'meeting',
+                  is_quick_booking: updatedBooking.is_quick_booking || false,
                 } 
               : booking
           )
@@ -500,6 +550,7 @@ const ConferenceRoomBooking: React.FC = () => {
           booker: updatedBooking.booker,
           purpose: updatedBooking.purpose || '',
           bookingType: updatedBooking.booking_type || 'meeting',
+          is_quick_booking: updatedBooking.is_quick_booking || false,
         };
         
         setBookings(prevBookings => [...prevBookings, newBooking]);
@@ -508,6 +559,9 @@ const ConferenceRoomBooking: React.FC = () => {
       // Återställ formulär
       resetForm();
       updateCurrentView(previousView); // Återgå till föregående vy
+      
+      // Uppdatera vyn direkt efter bokning
+      refreshCurrentView();
     } catch (err) {
       console.error('Fel vid bokning:', err);
       setErrorMessage('Ett fel uppstod vid bokningen. Försök igen senare.');
@@ -547,6 +601,9 @@ const ConferenceRoomBooking: React.FC = () => {
       if (currentView === 'form' && editingBookingId === id) {
         updateCurrentView(previousView);
       }
+      
+      // Uppdatera vyn direkt efter borttagning
+      refreshCurrentView();
     } catch (err) {
       console.error(`Fel vid borttagning av bokning med id ${id}:`, err);
       setError('Kunde inte ta bort bokningen. Försök igen senare.');
@@ -573,6 +630,17 @@ const ConferenceRoomBooking: React.FC = () => {
     setCurrentView(view);
     localStorage.setItem('conferenceRoomView', view);
   };
+
+  // Uppdatera bokningar när vyn ändras
+  useEffect(() => {
+    // När man byter till veckokalendern, uppdatera bokningarna
+    if (currentView === 'week-view') {
+      console.log('Uppdaterar bokningar när vyn byts till veckokalendern');
+      loadBookingsForWeek();
+    } else if (currentView === 'calendar' || currentView === 'list') {
+      loadBookingsForDate();
+    }
+  }, [currentView, loadBookingsForWeek, loadBookingsForDate]);
 
   // Hantera filterändringar
   const handleFilterChange = useCallback((filters: any) => {
@@ -706,6 +774,7 @@ const ConferenceRoomBooking: React.FC = () => {
               booker: createdBooking.booker,
               purpose: createdBooking.purpose || '',
               bookingType: createdBooking.booking_type || 'meeting',
+              is_quick_booking: createdBooking.is_quick_booking || false,
             };
             
             setBookings(prevBookings => [...prevBookings, newBooking]);
@@ -720,6 +789,8 @@ const ConferenceRoomBooking: React.FC = () => {
       setShowRecurringForm(false);
       updateCurrentView(previousView);
       
+      // Uppdatera vyn direkt efter skapande av återkommande bokningar
+      refreshCurrentView();
     } catch (err) {
       console.error('Fel vid skapande av återkommande bokningar:', err);
       showToast('Ett fel uppstod vid skapande av återkommande bokningar', 'error');
@@ -952,6 +1023,16 @@ const ConferenceRoomBooking: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600 dark:text-gray-300 italic hidden md:inline">Du kan dra för att boka flera timmar</span>
+                <button 
+                  onClick={() => refreshCurrentView()}
+                  className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 dark:from-blue-600 dark:to-blue-700 dark:hover:from-blue-500 dark:hover:to-blue-600 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2 mr-2"
+                  aria-label="Uppdatera"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7.805V10a1 1 0 01-2 0V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13.5V11a1 1 0 112 0v7a1 1 0 01-1 1h-7a1 1 0 110-2h4.101a7.002 7.002 0 01-9.101-4.666 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  Uppdatera
+                </button>
                 <button 
                   onClick={showBookingForm}
                   className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 dark:from-primary-600 dark:to-primary-700 dark:hover:from-primary-500 dark:hover:to-primary-600 text-white px-4 py-2 rounded-lg transition-all duration-200 shadow-soft hover:shadow-soft-lg flex items-center gap-2"
@@ -1281,6 +1362,7 @@ const ConferenceRoomBooking: React.FC = () => {
                     booker,
                     purpose: purpose || '',
                     bookingType: bookings.find(b => b.id === editingBookingId)?.bookingType || 'meeting',
+                    is_quick_booking: bookings.find(b => b.id === editingBookingId)?.is_quick_booking || false,
                   })}
                   className="px-5 py-2.5 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 transition-all duration-200 shadow-sm flex items-center gap-2"
                 >
