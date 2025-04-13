@@ -14,6 +14,42 @@ A modern, responsive room display and booking system with real-time updates, sci
 
 </div>
 
+## 📸 Screenshots
+
+Here are some screenshots showing the system's functionality:
+
+<div align="center">
+
+### Room Display - Available Status
+<img src="docs/images/room-display-available.png" alt="Room display in available status" width="600" />
+<p><em>A room display showing that the room is available, with quick booking functionality and display of the next scheduled meeting.</em></p>
+
+### Room Display - Occupied Status
+<img src="docs/images/room-display-occupied.png" alt="Room display in occupied status" width="600" />
+<p><em>A room display showing that the room is occupied with information about the current meeting and option to cancel quick meetings.</em></p>
+
+### Booking System - Week View
+<img src="docs/images/booking-system-week-view.png" alt="Booking system in week view" width="800" />
+<p><em>The system's week view showing all bookings in a grid layout, with options to create new bookings and view existing ones.</em></p>
+
+### Booking System - List View
+<img src="docs/images/booking-system-list-view.png" alt="Booking system in list view" width="800" />
+<p><em>List view of all rooms and their bookings for a specific day, with detailed information about each booking.</em></p>
+
+</div>
+
+## ⚡ Quick Start
+
+Get started in 30 seconds:
+
+```bash
+git clone https://github.com/yourusername/Sjobergska_RoD.git
+cd Sjobergska_RoD && npm install
+npm run dev
+```
+
+Then visit [http://localhost:5173](http://localhost:5173) in your browser.
+
 ## ✨ Features
 
 <div align="center">
@@ -43,7 +79,7 @@ A modern, responsive room display and booking system with real-time updates, sci
 - Sync status monitoring
 - OAuth2 authentication flow
 
-> **OBS!** Google Calendar-integrationen är för närvarande under utveckling och inte fullt testad i produktion. Använd med försiktighet.
+> **Note!** Google Calendar integration is currently under development and not fully tested in production. Use with caution.
 
 ### 📱 Room Display
 - Dedicated display mode for tablets/screens
@@ -51,30 +87,6 @@ A modern, responsive room display and booking system with real-time updates, sci
 - Real-time room availability status
 - Next upcoming meeting info
 - Quick booking and cancellation interface
-
-## 📸 Screenshots
-
-Here are some screenshots showing the system's functionality:
-
-<div align="center">
-
-### Room Display - Available Status
-<img src="docs/images/room-display-available.png" alt="Room display in available status" width="600" />
-<p><em>A room display showing that the room is available, with quick booking functionality and display of the next scheduled meeting.</em></p>
-
-### Room Display - Occupied Status
-<img src="docs/images/room-display-occupied.png" alt="Room display in occupied status" width="600" />
-<p><em>A room display showing that the room is occupied with information about the current meeting and option to cancel quick meetings.</em></p>
-
-### Booking System - Week View
-<img src="docs/images/booking-system-week-view.png" alt="Booking system in week view" width="800" />
-<p><em>The system's week view showing all bookings in a grid layout, with options to create new bookings and view existing ones.</em></p>
-
-### Booking System - List View
-<img src="docs/images/booking-system-list-view.png" alt="Booking system in list view" width="800" />
-<p><em>List view of all rooms and their bookings for a specific day, with detailed information about each booking.</em></p>
-
-</div>
 
 ## 🛠️ Tech Stack
 
@@ -96,24 +108,32 @@ Here are some screenshots showing the system's functionality:
 - Supabase account
 - Google Developer account (for Calendar integration)
 
-### Quick Start
+### Installation Guide
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/Sjobergska_RoD.git
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/Sjobergska_RoD.git
+   cd Sjobergska_RoD
+   ```
 
-# Navigate to project directory
-cd Sjobergska_RoD
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-# Install dependencies
-npm install
+3. **Configure environment variables**
+   ```bash
+   cp .env.example .env.local
+   ```
+   Then edit `.env.local` with your specific details.
 
-# Set up environment variables
-cp .env.example .env.local
+4. **Start the development server**
+   ```bash
+   npm run dev
+   ```
 
-# Start development server
-npm run dev
-```
+5. **Open your browser**
+   Visit [http://localhost:5173](http://localhost:5173)
 
 ## ⚙️ Configuration
 
@@ -141,6 +161,28 @@ VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
 -- Set up Google Calendar integration
 -- Run the script from src/scripts/updateDatabaseForGoogleCalendar.sql
 ```
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### General Questions
+**Q: Can the system be used without an internet connection?**  
+A: No, the system requires an internet connection to function properly, especially for real-time features and synchronization.
+
+**Q: Does the system support multiple languages?**  
+A: Currently, only English is fully supported, but we plan to add more languages in the future.
+
+**Q: Can I customize the appearance of the room display?**  
+A: Yes, you can choose between light and dark themes and customize colors and logos by editing the CSS files.
+
+### Technical Questions
+**Q: Which browsers are supported?**  
+A: The system supports modern browsers such as Chrome, Firefox, Safari, and Edge.
+
+**Q: Can I integrate with calendar systems other than Google Calendar?**  
+A: Currently, only Google Calendar is supported, but we plan to add Microsoft Outlook support in the future.
+
+**Q: How does the PWA support work?**  
+A: The system can be installed as a Progressive Web App on mobile devices and computers, providing an app-like experience.
 
 ## 📚 Documentation
 
@@ -250,6 +292,16 @@ The app stores user preferences to provide a personalized experience:
 - Theme preference
 - Preferred room
 - Booker name
+
+## 📞 Contact & Support
+
+Have questions or need help? Contact us!
+
+- **Email:** support@sjobergska.com
+- **GitHub:** [Report Issues](https://github.com/yourusername/Sjobergska_RoD/issues)
+- **Web:** [www.sjobergska.com](https://www.sjobergska.com)
+
+Support hours: Weekdays 8:00 AM - 5:00 PM CET
 
 ## 🤝 Contributing
 
