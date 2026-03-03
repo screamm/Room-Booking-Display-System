@@ -102,6 +102,12 @@ export default {
     if (roomIdMatch) {
       const id = parseInt(roomIdMatch[1]);
 
+      if (method === 'GET') {
+        const room = await env.DB.prepare('SELECT * FROM rooms WHERE id=?').bind(id).first();
+        if (!room) return err(`Inget rum hittades med ID ${id}`, 404);
+        return json(parseRoom(room as Record<string, unknown>));
+      }
+
       if (method === 'PUT') {
         const body = await request.json() as Partial<{ name: string; capacity: number; features: string[] }>;
         const sets: string[] = [];
@@ -197,10 +203,27 @@ export default {
         if (body.booking_type !== undefined) { sets.push('booking_type=?'); vals.push(body.booking_type); }
         if (body.is_quick_booking !== undefined) { sets.push('is_quick_booking=?'); vals.push(body.is_quick_booking ? 1 : 0); }
         if (sets.length === 0) return err('Inga fält att uppdatera');
+        // Overlap check for the updated booking
+        const checkRoomId = body.room_id ?? (current.room_id as number);
+        const checkDate = body.date ?? (current.date as string);
+        const checkStart = body.start_time ?? (current.start_time as string);
+        const checkEnd = body.end_time ?? (current.end_time as string);
+        if (checkStart && checkEnd && checkStart >= checkEnd) {
+          return err('Sluttiden måste vara efter starttiden');
+        }
+        const overlapCheck = await env.DB.prepare(
+          'SELECT id FROM bookings WHERE room_id=? AND date=? AND start_time<? AND end_time>? AND id!=?'
+        ).bind(checkRoomId, checkDate, checkEnd, checkStart, id).first();
+        if (overlapCheck) {
+          return json({ error: 'OVERLAP', message: 'Bokningen överlappar med en befintlig bokning' }, 409);
+        }
         vals.push(id);
         await env.DB.prepare(`UPDATE bookings SET ${sets.join(',')} WHERE id=?`).bind(...vals).run();
         const booking = await env.DB.prepare('SELECT * FROM bookings WHERE id=?').bind(id).first();
         await broadcastRoomUpdate(env, current.room_id as number);
+        if (body.room_id && body.room_id !== current.room_id) {
+          await broadcastRoomUpdate(env, body.room_id);
+        }
         return json(parseBooking(booking as Record<string, unknown>));
       }
 
