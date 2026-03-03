@@ -4,8 +4,7 @@
   "private": true,
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
-    "@supabase/supabase-js": "^2.49.1",
-    "@testing-library/dom": "^10.4.0",
+"@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^13.5.0",

@@ -15,8 +15,7 @@ export default defineConfig(({ mode }) => {
       'process.env': {
         GOOGLE_SDK_NODE_LOGGING: 'false',
         NODE_ENV: mode,
-        VITE_SUPABASE_URL: env.VITE_SUPABASE_URL,
-        VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY
+        VITE_API_URL: env.VITE_API_URL,
       },
       'process.stdout': {
         isTTY: false

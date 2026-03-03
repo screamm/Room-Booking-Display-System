@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { googleCalendarApi } from '../lib/googleCalendarApi';
 import { useToast } from '../contexts/ToastContext';
-import { supabase } from '../lib/supabase';
 
 interface GoogleCalendarSyncProps {
   onSyncComplete?: () => void;
@@ -52,50 +51,18 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({ onSyncComplete 
         // Fortsätt ändå, eftersom vi kan hantera bokningarna
       }
 
-      // Hämta alla bokningar som inte redan är synkade
-      const { data: bookings, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .is('google_calendar_id', null);
-
-      if (error) {
-        console.error('Fel vid hämtning av bokningar:', error);
-        showToast('Kunde inte hämta bokningar för synkronisering', 'error');
-        setIsLoading(false);
-        return;
-      }
-
-      if (!bookings || bookings.length === 0) {
-        showToast('Inga nya bokningar att synka', 'info');
-        setIsLoading(false);
-        return;
-      }
-
-      // Här skulle vi normalt synka med Google Calendar
-      // Men eftersom funktionen inte är implementerad än, visar vi bara en informationsruta
+      // Google Calendar-synkronisering är inte implementerad ännu
       showToast(
         'Google Calendar-synkronisering är inte tillgänglig än. Kommer att implementeras i framtida version.',
         'warning'
       );
-      
+
       // Uppdatera status
       try {
-        const { error: insertError } = await supabase
-          .from('sync_status')
-          .insert({
-            status: 'success',
-            error_message: null
-          });
-          
-        if (insertError) {
-          console.warn('Kunde inte uppdatera synkroniseringsstatus:', insertError.message);
-        }
-        
-        // Hämta den senaste statusen
         const status = await googleCalendarApi.getSyncStatus();
         setSyncStatus(status);
       } catch (statusError) {
-        console.warn('Kunde inte spara synkroniseringsstatus:', statusError);
+        console.warn('Kunde inte hämta synkroniseringsstatus:', statusError);
       }
       
       onSyncComplete?.();
