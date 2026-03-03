@@ -131,14 +131,11 @@ export const RoomDisplay: React.FC = () => {
         const cacheKey = `room-${decodedRoomName}`;
         const cachedRoom = roomCache.get(cacheKey);
         if (cachedRoom && Date.now() - cachedRoom.timestamp < CACHE_DURATION) {
-          console.log('Använder cachat rum:', decodedRoomName);
           setRoom(cachedRoom.data);
           setRoomName(cachedRoom.data?.name || '');
           setLoading(false);
           return;
         }
-        
-        console.log('Söker efter rum med namn:', decodedRoomName);
         
         // Hämta alla rum först för att hitta en matchning
         const { data: allRooms, error: roomsError } = await supabase
@@ -151,8 +148,6 @@ export const RoomDisplay: React.FC = () => {
           setLoading(false);
           return;
         }
-        
-        console.log('Alla rum:', allRooms);
         
         // Försök hitta en matchning, även delvis
         let matchedRoom = null;
@@ -180,8 +175,7 @@ export const RoomDisplay: React.FC = () => {
 
         // Uppdatera cache med matchat rum
         roomCache.set(cacheKey, { data: matchedRoom, timestamp: Date.now() });
-        
-        console.log('Rum hittades:', matchedRoom);
+
         setRoom(matchedRoom);
         setRoomName(matchedRoom.name);
         setLoading(false);
@@ -193,13 +187,6 @@ export const RoomDisplay: React.FC = () => {
     };
 
     fetchRoomData();
-    const intervalId = setInterval(fetchBookings, 2 * 60 * 1000); // Uppdatera var 2:a minut
-    
-    // Initial hämtning av bokningar kommer att göras när room är satt
-    
-    return () => {
-      clearInterval(intervalId);
-    };
   }, [fetchBookings]);
 
   // Uppdatera bokningar när rum eller tid ändras
@@ -208,6 +195,45 @@ export const RoomDisplay: React.FC = () => {
       fetchBookings();
     }
   }, [room, currentTimeString, fetchBookings]);
+
+  // Supabase Realtime subscription för realtidsuppdateringar
+  useEffect(() => {
+    if (!room) return;
+
+    // Initial fetch
+    fetchBookings();
+
+    const channel = supabase
+      .channel(`room-display-${room.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `room_id=eq.${room.id}`,
+        },
+        () => {
+          // Rensa cache och hämta om
+          const now = new Date();
+          const today = now.toISOString().split('T')[0];
+          const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          bookingsCache.delete(`${room.id}-${today}-${tomorrow}`);
+          fetchBookings();
+        }
+      )
+      .subscribe();
+
+    // Behåll 60-sekunders fallback-polling som säkerhetsnät
+    const fallbackTimer = setInterval(() => {
+      fetchBookings();
+    }, 60000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(fallbackTimer);
+    };
+  }, [room, fetchBookings]);
 
   // Funktion för att uppdatera bokningar vid användarinteraktion
   const handleManualRefresh = () => {
@@ -233,33 +259,7 @@ export const RoomDisplay: React.FC = () => {
     
     // Formatera currentTime för att endast jämföra timmar och minuter (HH:MM) utan sekunder
     let timeFormatted = currentTime.substring(0, 5);
-    
-    // För att hantera nyligen skapade bokningar, använd en korrigerad tid
-    // som är 1 sekund bakåt för att säkerställa att exakt jämförelse fungerar
-    const timeNumeric = timeFormatted.replace(':', '');
-    const now = new Date();
-    
-    console.log('Uppdaterar bokningsstatus:', { 
-      bookings, 
-      currentTime: timeFormatted, 
-      today, 
-      tomorrow 
-    });
-    
-    // Gå igenom bokningar och logga detaljer för felsökning
-    bookings.forEach(booking => {
-      // Ta bort sekunderna från start_time för korrekt jämförelse
-      const bookingStartTime = booking.start_time.substring(0, 5);
-      const bookingEndTime = booking.end_time.substring(0, 5);
-      
-      console.log(`Bokning: ${booking.date} ${bookingStartTime}-${bookingEndTime}, Aktuell tid: ${timeFormatted}`,
-        {
-          isToday: booking.date === today,
-          startBeforeNow: bookingStartTime <= timeFormatted,
-          endAfterNow: bookingEndTime > timeFormatted
-        });
-    });
-    
+
     const currentBooking = bookings.find(booking => {
       // Ta bort sekunderna från start_time och end_time för korrekt jämförelse
       const bookingStartTime = booking.start_time.substring(0, 5);
@@ -281,12 +281,6 @@ export const RoomDisplay: React.FC = () => {
         (booking.date === today && bookingStartTime > timeFormatted) ||
         (booking.date === tomorrow && (!currentBooking || currentBooking.end_time.substring(0, 5) <= timeFormatted))
       );
-    });
-
-    console.log('Bokningsstatus:', { 
-      currentBooking, 
-      nextBooking, 
-      isCurrentBookingValid: currentBooking !== undefined
     });
 
     setCurrentBooking(currentBooking || null);
@@ -337,8 +331,6 @@ export const RoomDisplay: React.FC = () => {
       // Beräkna tidsskillnad i minuter
       const timeDiffMinutes = (nextBookingDate.getTime() - now.getTime()) / (1000 * 60);
       
-      console.log(`Nästa bokning: ${nextBookingStartTime}, tidsskillnad: ${timeDiffMinutes} minuter`);
-      
       // Om nästa bokning är inom 30 minuter, sluta 1 minut innan
       if (timeDiffMinutes <= 30 && timeDiffMinutes > 0) {
         // Sluttid är 1 minut innan nästa bokning
@@ -346,19 +338,14 @@ export const RoomDisplay: React.FC = () => {
         const endHour = nextMinute > 0 ? nextHour : nextHour - 1;
         
         endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-        console.log(`Bokning anpassad till nästa bokning: ${startTime} - ${endTime}`);
       } else {
         // Använd standardsluttid (30 minuter)
         endTime = `${String(defaultEndDate.getHours()).padStart(2, '0')}:${String(defaultEndDate.getMinutes()).padStart(2, '0')}`;
-        console.log(`Standardbokning 30 minuter: ${startTime} - ${endTime}`);
       }
     } else {
       // Ingen kommande bokning, använd standardsluttid (30 minuter)
       endTime = `${String(defaultEndDate.getHours()).padStart(2, '0')}:${String(defaultEndDate.getMinutes()).padStart(2, '0')}`;
-      console.log(`Standardbokning 30 minuter: ${startTime} - ${endTime}`);
     }
-
-    console.log(`Försöker boka: ${startTime} till ${endTime}`);
 
     try {
       // Skapa bokningsobjekt med is_quick_booking direkt
@@ -371,8 +358,6 @@ export const RoomDisplay: React.FC = () => {
         booker: 'Spontanbokning',
         is_quick_booking: true
       };
-      
-      console.log('Skapar bokning:', bookingData);
       
       const { data: insertedData, error } = await supabase
         .from('bookings')
@@ -388,8 +373,6 @@ export const RoomDisplay: React.FC = () => {
         });
         throw error;
       } else {
-        console.log('Bokning skapad framgångsrikt:', insertedData);
-        
         // Uppdatera direkt i UI för bättre användarupplevelse - lägg till aktuell bokning i state
         if (insertedData && insertedData.length > 0) {
           // Skapa direkt en bokning att visa medan vi väntar på databasuppdatering
@@ -470,17 +453,13 @@ export const RoomDisplay: React.FC = () => {
     const debouncedRefresh = () => {
       const now = Date.now();
       if (now - lastUpdateTime > updateCooldown) {
-        console.log('Debounced uppdatering triggas');
         handleManualRefresh();
         lastUpdateTime = now;
-      } else {
-        console.log('Uppdatering ignoreras, för tätt inpå föregående uppdatering');
       }
     };
-    
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && room) {
-        console.log('Användaren återvände till sidan');
         debouncedRefresh();
       }
     };
@@ -490,7 +469,6 @@ export const RoomDisplay: React.FC = () => {
     // Även lyssna på fokusändringar för webbläsarfönstret
     const handleFocus = () => {
       if (room) {
-        console.log('Fönstret fick fokus');
         debouncedRefresh();
       }
     };
@@ -514,8 +492,8 @@ export const RoomDisplay: React.FC = () => {
     // Definiera en funktion som kan anropas vid användarinteraktion
     const tryFullscreen = () => {
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-          console.log('Kunde inte aktivera fullskärm:', err);
+        document.documentElement.requestFullscreen().catch(() => {
+          // Fullscreen kräver användarinteraktion, ignorera felet tyst
         });
       }
     };
@@ -540,10 +518,10 @@ export const RoomDisplay: React.FC = () => {
       // Om fullskärm avslutas och vi är på en display-sida, försök återupprätta
       if (!document.fullscreenElement && window.location.pathname.includes('/display/')) {
         // Vänta på nästa användarinteraktion för att återupprätta
-        const handleNextInteraction = (e: MouseEvent | TouchEvent) => {
-          // Endast aktivera fullscreen vid direkt interaktion med sidan
+        const handleNextInteraction = (_e: MouseEvent | TouchEvent) => {
+          // Fullscreen kräver användarinteraktion
           document.documentElement.requestFullscreen().catch(() => {
-            console.log('Användaren måste interagera med sidan för fullskärm');
+            // Ignorera tyst, användaren måste interagera med sidan för fullskärm
           });
         };
         
@@ -647,7 +625,14 @@ export const RoomDisplay: React.FC = () => {
         </div>
 
         {/* Content area - flex-grow for dynamic sizing */}
-        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 lg:px-6 ${isPortrait ? 'py-2' : 'py-1'} pb-[calc(2rem+1.5rem)] sm:pb-[calc(3rem+1.5rem)] md:pb-[calc(4rem+2rem)] lg:pb-[calc(6rem+2rem)]`}>
+        <div className={`flex-grow flex flex-col justify-between px-2 sm:px-4 lg:px-6 ${isPortrait ? 'py-2' : 'py-1'} ${ 
+          // Villkorsstyrda klasser med vanliga pb-värden
+          nextBooking 
+            ? isOccupied 
+              ? 'pb-12 sm:pb-14 md:pb-16 lg:pb-24' // Nästa konferens och upptaget (standardavstånd för bannern)
+              : 'pb-16 sm:pb-20 md:pb-24 lg:pb-32' // Nästa konferens och ledigt (extra avstånd)
+            : 'pb-12 sm:pb-14 md:pb-16 lg:pb-24'  // Ingen nästa konferens (standardavstånd för bannern)
+        }`}>
           <div className="w-full">
             {currentBooking && (
               <div className="flex flex-col w-full">
@@ -732,7 +717,7 @@ export const RoomDisplay: React.FC = () => {
           {/* Nästa konferens - anpassad för olika skärmstorlekar, endast visas om det finns utrymme */}
           {nextBooking && (
             <div className="mt-auto">
-              <div className={`relative p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} bottom-2 sm:bottom-3 md:bottom-4 lg:bottom-6 ${!currentBooking ? 'mb-[-1.9rem]' : ''} ${
+              <div className={`relative p-2 sm:p-3 md:p-4 lg:p-5 rounded-lg ${isPortrait ? 'max-w-full' : 'max-w-[50%] sm:max-w-[40%] md:max-w-[30%]'} ${
                 displayTheme === 'dark' 
                   ? 'bg-blue-900/20 border border-blue-800/50' 
                   : 'bg-blue-100/50 border border-blue-200'

@@ -61,20 +61,94 @@ export const roomsApi = {
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (error) {
         if (error.code === 'PGRST116') {
           throw new Error(`Inget rum hittades med ID ${id}`);
         }
         throw new Error(`Kunde inte hämta rum: ${error.message}`);
       }
-      
+
       return data || null;
     } catch (error) {
       logError(`Fel vid hämtning av rum med id ${id}:`, error);
       throw error;
     }
-  }
+  },
+
+  async create(room: Omit<Room, 'id' | 'created_at'>): Promise<Room> {
+    if (!room.name || !room.name.trim()) {
+      throw new Error('Rumsnamn måste anges');
+    }
+    if (!room.capacity || room.capacity <= 0) {
+      throw new Error('Kapacitet måste vara ett positivt tal');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .insert([{ ...room, name: room.name.trim() }])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Kunde inte skapa rum: ${error.message}`);
+      }
+      return data;
+    } catch (error) {
+      logError('Fel vid skapande av rum:', error);
+      throw error;
+    }
+  },
+
+  async update(id: number, room: Partial<Omit<Room, 'id' | 'created_at'>>): Promise<Room> {
+    if (!id || id <= 0) {
+      throw new Error('Ogiltigt rum-ID');
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .update(room)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error(`Inget rum hittades med ID ${id}`);
+        }
+        throw new Error(`Kunde inte uppdatera rum: ${error.message}`);
+      }
+      return data;
+    } catch (error) {
+      logError(`Fel vid uppdatering av rum med id ${id}:`, error);
+      throw error;
+    }
+  },
+
+  async delete(id: number): Promise<void> {
+    if (!id || id <= 0) {
+      throw new Error('Ogiltigt rum-ID');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error(`Inget rum hittades med ID ${id}`);
+        }
+        throw new Error(`Kunde inte ta bort rum: ${error.message}`);
+      }
+    } catch (error) {
+      logError(`Fel vid borttagning av rum med id ${id}:`, error);
+      throw error;
+    }
+  },
 };
 
 // Bokningar API
