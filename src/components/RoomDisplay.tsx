@@ -98,7 +98,7 @@ export const RoomDisplay: React.FC = () => {
     // Hämta alla bokningar för rum och datum
     const apiUrl = import.meta.env.VITE_API_URL as string;
     const bookingsRes = await fetch(
-      `${apiUrl}/api/bookings?room_id=${room.id}&date_gte=${today}&date_lte=${tomorrow}`
+      `${apiUrl}/api/bookings?room_id=${room.id}&start_date=${today}&end_date=${tomorrow}`
     );
     if (!bookingsRes.ok) {
       console.error('Fel vid hämtning av bokningar:', bookingsRes.statusText);
@@ -323,10 +323,11 @@ export const RoomDisplay: React.FC = () => {
     const today = now.toISOString().split('T')[0];
     const quickApiUrl = import.meta.env.VITE_API_URL as string;
     const todayRes = await fetch(
-      `${quickApiUrl}/api/bookings?room_id=${room.id}&date=${today}&start_time_gte=${startTime}`
+      `${quickApiUrl}/api/bookings?room_id=${room.id}&date=${today}`
     );
     const bookingsError = !todayRes.ok;
-    const todaysBookings: Booking[] | null = todayRes.ok ? await todayRes.json() : null;
+    const allTodaysBookings: Booking[] | null = todayRes.ok ? await todayRes.json() : null;
+    const todaysBookings = allTodaysBookings ? allTodaysBookings.filter(b => b.start_time > startTime) : null;
 
     // Bestäm sluttid baserat på nästa bokning (om någon finns inom 30 minuter)
     let endTime;
@@ -382,14 +383,10 @@ export const RoomDisplay: React.FC = () => {
         console.error('Fel vid snabbbokning (detaljer):', errText);
         throw new Error(errText);
       } else {
-        const insertedData: Booking[] = await insertRes.json();
+        const insertedData: Booking = await insertRes.json();
         // Uppdatera direkt i UI för bättre användarupplevelse - lägg till aktuell bokning i state
-        if (insertedData && insertedData.length > 0) {
-          // Skapa direkt en bokning att visa medan vi väntar på databasuppdatering
-          const newBooking = insertedData[0];
-          setCurrentBooking(newBooking);
-
-          // Forcera uppdatering av tid för att trigga ny rendering
+        if (insertedData && insertedData.id) {
+          setCurrentBooking(insertedData);
           setCurrentTime(new Date());
         }
       }
@@ -399,7 +396,7 @@ export const RoomDisplay: React.FC = () => {
       const refetchDate = now.toISOString().split('T')[0];
       const refetchTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const refetchRes = await fetch(
-        `${refetchApiUrl}/api/bookings?room_id=${room.id}&date_gte=${refetchDate}&date_lte=${refetchTomorrow}`
+        `${refetchApiUrl}/api/bookings?room_id=${room.id}&start_date=${refetchDate}&end_date=${refetchTomorrow}`
       );
       const fetchError = !refetchRes.ok;
       if (fetchError) {
@@ -436,7 +433,7 @@ export const RoomDisplay: React.FC = () => {
       const cancelDate = now.toISOString().split('T')[0];
       const cancelTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const cancelRefetchRes = await fetch(
-        `${cancelApiUrl}/api/bookings?room_id=${room.id}&date_gte=${cancelDate}&date_lte=${cancelTomorrow}`
+        `${cancelApiUrl}/api/bookings?room_id=${room.id}&start_date=${cancelDate}&end_date=${cancelTomorrow}`
       );
       if (cancelRefetchRes.ok) {
         const bookings: Booking[] = await cancelRefetchRes.json();
