@@ -5,7 +5,7 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "sjobergska-db"
-database_id = "PLACEHOLDER"
+database_id = "18a1793e-85fb-49b6-93e5-745fc9106324"
 
 [durable_objects]
 bindings = [
