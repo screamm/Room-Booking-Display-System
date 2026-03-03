@@ -1,0 +1,17 @@
+name = "sjobergska-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sjobergska-db"
+database_id = "PLACEHOLDER"
+
+[durable_objects]
+bindings = [
+  { name = "BROADCASTER", class_name = "BookingsBroadcaster" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["BookingsBroadcaster"]
