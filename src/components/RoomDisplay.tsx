@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
 import type { Room, Booking } from '../types/database.types';
 
 const QUICK_BOOK_PHRASES = [
@@ -97,19 +96,15 @@ export const RoomDisplay: React.FC = () => {
     }
 
     // Hämta alla bokningar för rum och datum
-    const { data: bookings, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('room_id', room.id)
-      .gte('date', today)
-      .lte('date', tomorrow)
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true });
-
-    if (error) {
-      console.error('Fel vid hämtning av bokningar:', error);
+    const apiUrl = import.meta.env.VITE_API_URL as string;
+    const bookingsRes = await fetch(
+      `${apiUrl}/api/bookings?room_id=${room.id}&date_gte=${today}&date_lte=${tomorrow}`
+    );
+    if (!bookingsRes.ok) {
+      console.error('Fel vid hämtning av bokningar:', bookingsRes.statusText);
       return;
     }
+    const bookings: Booking[] = await bookingsRes.json();
 
     // Uppdatera cache
     bookingsCache.set(cacheKey, { data: bookings, timestamp: Date.now() });
@@ -138,16 +133,15 @@ export const RoomDisplay: React.FC = () => {
         }
         
         // Hämta alla rum först för att hitta en matchning
-        const { data: allRooms, error: roomsError } = await supabase
-          .from('rooms')
-          .select('*');
-          
-        if (roomsError) {
-          console.error('Kunde inte hämta rumlistan:', roomsError);
+        const apiUrl = import.meta.env.VITE_API_URL as string;
+        const roomsRes = await fetch(`${apiUrl}/api/rooms`);
+        if (!roomsRes.ok) {
+          console.error('Kunde inte hämta rumlistan:', roomsRes.statusText);
           setError('Ett fel uppstod vid sökning efter rum.');
           setLoading(false);
           return;
         }
+        const allRooms: Room[] = await roomsRes.json();
         
         // Försök hitta en matchning, även delvis
         let matchedRoom = null;
@@ -202,44 +196,56 @@ export const RoomDisplay: React.FC = () => {
     fetchBookingsRef.current = fetchBookings;
   }, [fetchBookings]);
 
-  // Supabase Realtime subscription för realtidsuppdateringar
+  // WebSocket-anslutning för realtidsuppdateringar via Cloudflare Durable Object
   useEffect(() => {
     if (!room) return;
 
-    // Initial fetch
-    fetchBookingsRef.current();
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
 
-    const channel = supabase
-      .channel(`room-display-${room.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-          filter: `room_id=eq.${room.id}`,
-        },
-        () => {
-          // Rensa cache och hämta om
-          const now = new Date();
-          const today = now.toISOString().split('T')[0];
-          const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          bookingsCache.delete(`${room.id}-${today}-${tomorrow}`);
-          fetchBookingsRef.current();
+    function connect() {
+      if (!isMounted) return;
+      const apiUrl = import.meta.env.VITE_API_URL as string;
+      const wsProto = apiUrl.startsWith('https') ? 'wss' : 'ws';
+      const host = apiUrl.replace(/^https?:\/\//, '');
+      ws = new WebSocket(`${wsProto}://${host}/api/ws/${room!.id}`);
+
+      ws.onopen = () => {
+        fetchBookingsRef.current();
+      };
+
+      ws.onmessage = () => {
+        // Rensa cache och hämta om vid varje bokning-ändring
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        bookingsCache.delete(`${room!.id}-${today}-${tomorrow}`);
+        fetchBookingsRef.current();
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          reconnectTimeout = setTimeout(connect, 5000);
         }
-      )
-      .subscribe();
+      };
+    }
 
-    // Behåll 60-sekunders fallback-polling som säkerhetsnät
+    fetchBookingsRef.current();
+    connect();
+
+    // 60s fallback-polling som säkerhetsnät om WebSocket missar något
     const fallbackTimer = setInterval(() => {
       fetchBookingsRef.current();
     }, 60000);
 
     return () => {
-      supabase.removeChannel(channel);
+      isMounted = false;
+      if (reconnectTimeout !== null) clearTimeout(reconnectTimeout);
+      ws?.close();
       clearInterval(fallbackTimer);
     };
-  }, [room]); // Bara room som dependency – fetchBookings via ref
+  }, [room]); // Bara room som dependency
 
   // Funktion för att uppdatera bokningar vid användarinteraktion
   const handleManualRefresh = () => {
@@ -315,17 +321,16 @@ export const RoomDisplay: React.FC = () => {
     
     // Hämta bokningar för nuvarande datum för att kontrollera kommande bokningar
     const today = now.toISOString().split('T')[0];
-    const { data: todaysBookings, error: bookingsError } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('room_id', room.id)
-      .eq('date', today)
-      .gte('start_time', startTime)
-      .order('start_time', { ascending: true });
-    
+    const quickApiUrl = import.meta.env.VITE_API_URL as string;
+    const todayRes = await fetch(
+      `${quickApiUrl}/api/bookings?room_id=${room.id}&date=${today}&start_time_gte=${startTime}`
+    );
+    const bookingsError = !todayRes.ok;
+    const todaysBookings: Booking[] | null = todayRes.ok ? await todayRes.json() : null;
+
     // Bestäm sluttid baserat på nästa bokning (om någon finns inom 30 minuter)
     let endTime;
-    
+
     if (!bookingsError && todaysBookings && todaysBookings.length > 0) {
       // Konvertera nästa boknings starttid till Date-objekt för jämförelse
       const nextBookingStartTime = todaysBookings[0].start_time;
@@ -365,48 +370,46 @@ export const RoomDisplay: React.FC = () => {
         is_quick_booking: true
       };
       
-      const { data: insertedData, error } = await supabase
-        .from('bookings')
-        .insert([bookingData])
-        .select();
+      const insertApiUrl = import.meta.env.VITE_API_URL as string;
+      const insertRes = await fetch(`${insertApiUrl}/api/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingData),
+      });
 
-      if (error) {
-        console.error('Fel vid snabbbokning (detaljer):', {
-          kod: error.code,
-          meddelande: error.message,
-          detaljer: error.details,
-          hint: error.hint
-        });
-        throw error;
+      if (!insertRes.ok) {
+        const errText = await insertRes.text();
+        console.error('Fel vid snabbbokning (detaljer):', errText);
+        throw new Error(errText);
       } else {
+        const insertedData: Booking[] = await insertRes.json();
         // Uppdatera direkt i UI för bättre användarupplevelse - lägg till aktuell bokning i state
         if (insertedData && insertedData.length > 0) {
           // Skapa direkt en bokning att visa medan vi väntar på databasuppdatering
           const newBooking = insertedData[0];
           setCurrentBooking(newBooking);
-          
+
           // Forcera uppdatering av tid för att trigga ny rendering
           setCurrentTime(new Date());
         }
       }
       
       // Uppdatera bokning direkt istället för att vänta på intervallet
-      const { data: bookings, error: fetchError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('room_id', room.id)
-        .gte('date', now.toISOString().split('T')[0])
-        .lte('date', new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true });
-        
+      const refetchApiUrl = import.meta.env.VITE_API_URL as string;
+      const refetchDate = now.toISOString().split('T')[0];
+      const refetchTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const refetchRes = await fetch(
+        `${refetchApiUrl}/api/bookings?room_id=${room.id}&date_gte=${refetchDate}&date_lte=${refetchTomorrow}`
+      );
+      const fetchError = !refetchRes.ok;
       if (fetchError) {
-        console.error('Fel vid hämtning av bokningar efter skapande:', fetchError);
+        console.error('Fel vid hämtning av bokningar efter skapande:', refetchRes.statusText);
       }
-      
-      if (!fetchError && bookings) {
+
+      if (!fetchError) {
+        const bookings: Booking[] = await refetchRes.json();
         // Uppdatera cache och tillstånd
-        const cacheKey = `${room.id}-${now.toISOString().split('T')[0]}-${new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`;
+        const cacheKey = `${room.id}-${refetchDate}-${refetchTomorrow}`;
         bookingsCache.set(cacheKey, { data: bookings, timestamp: Date.now() });
         updateBookingStates(bookings, currentTimeString);
       }
@@ -422,27 +425,23 @@ export const RoomDisplay: React.FC = () => {
     if (!currentBooking || !currentBooking.is_quick_booking || !room) return;
     
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .delete()
-        .eq('id', currentBooking.id);
+      const cancelApiUrl = import.meta.env.VITE_API_URL as string;
+      const deleteRes = await fetch(`${cancelApiUrl}/api/bookings/${currentBooking.id}`, {
+        method: 'DELETE',
+      });
+      if (!deleteRes.ok) throw new Error(await deleteRes.text());
 
-      if (error) throw error;
-      
       // Uppdatera bokningslistan
       const now = new Date();
-      const { data: bookings, error: fetchError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('room_id', room.id)
-        .gte('date', now.toISOString().split('T')[0])
-        .lte('date', new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true });
-        
-      if (!fetchError && bookings) {
+      const cancelDate = now.toISOString().split('T')[0];
+      const cancelTomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const cancelRefetchRes = await fetch(
+        `${cancelApiUrl}/api/bookings?room_id=${room.id}&date_gte=${cancelDate}&date_lte=${cancelTomorrow}`
+      );
+      if (cancelRefetchRes.ok) {
+        const bookings: Booking[] = await cancelRefetchRes.json();
         // Uppdatera cache och tillstånd
-        const cacheKey = `${room.id}-${now.toISOString().split('T')[0]}-${new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`;
+        const cacheKey = `${room.id}-${cancelDate}-${cancelTomorrow}`;
         bookingsCache.set(cacheKey, { data: bookings, timestamp: Date.now() });
         updateBookingStates(bookings, currentTimeString);
       }
