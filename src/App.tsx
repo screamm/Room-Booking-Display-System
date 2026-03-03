@@ -1,18 +1,14 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 import ConferenceRoomBooking from './components/ConferenceRoomBooking';
 import DisplayRoom from './pages/DisplayRoom';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { ToastProvider, useToast } from './contexts/ToastContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
 import ThemeToggle from './components/ThemeToggle';
-import { supabase } from './lib/supabase';
-
-// Lazy load mindre kritiska komponenter
-const RecurringBookingForm = lazy(() => import('./components/RecurringBookingForm'));
-const GoogleCalendarSync = lazy(() => import('./components/GoogleCalendarSync'));
-const MobileBookingView = lazy(() => import('./components/MobileBookingView'));
+import PinGate from './components/PinGate';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Laddningsindikator för lazy loaded komponenter
 const LoadingFallback = () => (
@@ -24,23 +20,28 @@ const LoadingFallback = () => (
 
 // Separata komponenter för att hantera Toast-kontexten
 const AppContent: React.FC = () => {
-  const { showToast } = useToast();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   return (
     <div className="app">
       <ThemeToggle />
       <Routes>
-        <Route path="/" element={<ConferenceRoomBooking />} />
-        <Route path="/display/:roomName" element={<DisplayRoom />} />
+        <Route
+          path="/"
+          element={
+            <ErrorBoundary>
+              <PinGate>
+                <ConferenceRoomBooking />
+              </PinGate>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/display/:roomName"
+          element={
+            <ErrorBoundary>
+              <DisplayRoom />
+            </ErrorBoundary>
+          }
+        />
       </Routes>
     </div>
   );
