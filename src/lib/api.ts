@@ -324,113 +324,76 @@ export const bookingsApi = {
 
   // Hitta det största lediga rummet för akutbokning
   async findLargestAvailableRoom(date: string, startTime: string, endTime: string): Promise<Room | null> {
-    console.log('%c SÖKER STÖRSTA LEDIGA RUM ', 'background: #0066cc; color: white; font-weight: bold;');
-    console.log('Parametrar:', { date, startTime, endTime });
-    
     try {
       // Validera indata
       if (!date || !startTime || !endTime) {
-        console.error('Ogiltiga parametrar - datum eller tid saknas');
         throw new Error('Datum eller tid saknas för rumsökning');
       }
-      
+
       // Formatera tider för korrekt jämförelse
       const formattedStartTime = formatTimeForComparison(startTime);
       const formattedEndTime = formatTimeForComparison(endTime);
-      
+
       // Validera att starttid är före sluttid
       if (formattedStartTime >= formattedEndTime) {
-        console.error('Ogiltig tidsperiod - starttid måste vara före sluttid');
         throw new Error('Starttid måste vara före sluttid');
       }
-      
+
       // Hämta alla rum
       const roomsResponse = await supabase.from('rooms').select('*');
-      
+
       if (roomsResponse.error) {
-        console.error('Fel vid hämtning av rum:', roomsResponse.error);
         throw new Error(`Kunde inte hämta rum: ${roomsResponse.error.message}`);
       }
-      
+
       const rooms = roomsResponse.data;
-      console.log(`Hittade ${rooms.length} rum totalt`);
-      
+
       // Hämta bokningar för det valda datumet
       const bookingsResponse = await supabase
         .from('bookings')
         .select('*')
         .eq('date', date);
-      
+
       if (bookingsResponse.error) {
-        console.error('Fel vid hämtning av bokningar:', bookingsResponse.error);
         throw new Error(`Kunde inte hämta bokningar: ${bookingsResponse.error.message}`);
       }
-      
+
       const bookings = bookingsResponse.data;
-      console.log(`Hittade ${bookings.length} bokningar för datum ${date}`);
-      
-      // Sök efter lediga rum
-      console.log('Söker efter lediga rum...');
-      
-      // För att bättre diagnostisera problem, samla rummen med överlapp
-      const roomsWithOverlap: string[] = [];
-      
+
       const availableRooms = rooms.filter(room => {
         // Hitta bokningar för detta rum
         const roomBookings = bookings.filter(booking => booking.room_id === room.id);
-        
+
         // Kontrollera om det finns överlappande bokningar
         const hasOverlap = roomBookings.some(booking => {
           const bookingStartTime = formatTimeForComparison(booking.start_time);
           const bookingEndTime = formatTimeForComparison(booking.end_time);
-          
+
           // Kontrollera överlappning
-          const overlap = (
+          return (
             (formattedStartTime < bookingEndTime && formattedEndTime > bookingStartTime) ||
             (bookingStartTime < formattedEndTime && bookingEndTime > formattedStartTime)
           );
-          
-          if (overlap) {
-            console.log(`Rum ${room.name} har överlappande bokning ${booking.start_time}-${booking.end_time}`);
-            roomsWithOverlap.push(`${room.name} (${booking.start_time}-${booking.end_time})`);
-          }
-          
-          return overlap;
         });
-        
+
         return !hasOverlap;
       });
-      
-      console.log(`Hittade ${availableRooms.length} lediga rum av ${rooms.length} totalt`);
-      
+
       if (availableRooms.length === 0) {
-        console.log('Inga lediga rum hittades');
-        
-        if (roomsWithOverlap.length > 0) {
-          console.log('Rum med överlappande bokningar:', roomsWithOverlap);
-          throw new OverlapError(`Alla rum är upptagna för tiden ${startTime}-${endTime}`);
-        }
-        
-        return null;
+        throw new OverlapError(`Alla rum är upptagna för tiden ${startTime}-${endTime}`);
       }
-      
+
       // Sortera rum efter kapacitet (största först)
       const sortedRooms = [...availableRooms].sort((a, b) => b.capacity - a.capacity);
-      
+
       // Returnera det största rummet
-      const largestRoom = sortedRooms[0];
-      console.log(`Största lediga rum: ${largestRoom.name} (kapacitet: ${largestRoom.capacity})`);
-      
-      return largestRoom;
+      return sortedRooms[0];
     } catch (error) {
-      console.error('%c FEL VID SÖKNING AV RUM ', 'background: #c10000; color: white; font-weight: bold;');
-      console.error('Error in findLargestAvailableRoom:', error);
-      
       // Rethrow OverlapError för att kunna hantera det särskilt i UI
       if (error instanceof OverlapError) {
         throw error;
       }
-      
+
       // För andra fel, kasta ett generiskt fel
       throw new Error(`Kunde inte hitta ledigt rum: ${error instanceof Error ? error.message : 'Okänt fel'}`);
     }

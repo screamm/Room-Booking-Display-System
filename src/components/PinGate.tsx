@@ -19,8 +19,8 @@ const PinGate: React.FC<PinGateProps> = ({ children }) => {
     try {
       const stored = localStorage.getItem(PIN_KEY);
       if (stored) {
-        const { pin: storedPin, timestamp } = JSON.parse(stored);
-        if (storedPin === correctPin && Date.now() - timestamp < SESSION_DURATION) {
+        const { timestamp } = JSON.parse(stored);
+        if (Date.now() - timestamp < SESSION_DURATION) {
           setIsAuthorized(true);
         } else {
           // Session har gått ut
@@ -40,7 +40,7 @@ const PinGate: React.FC<PinGateProps> = ({ children }) => {
       return;
     }
     if (pin === correctPin) {
-      localStorage.setItem(PIN_KEY, JSON.stringify({ pin, timestamp: Date.now() }));
+      localStorage.setItem(PIN_KEY, JSON.stringify({ timestamp: Date.now() }));
       setIsAuthorized(true);
       setError('');
     } else {

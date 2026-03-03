@@ -36,8 +36,6 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
     setIsLoading(true);
     
     try {
-      console.log('%c AKUTBOKNING INITIERAD ', 'background: #c10000; color: white; font-weight: bold;');
-      
       // Hämta aktuellt datum och tid
       const now = new Date();
       const currentDate = formatDate(now);
@@ -56,12 +54,6 @@ const EmergencyBookingButton: React.FC<EmergencyBookingButtonProps> = ({ onBooki
       const endTime = new Date(now);
       endTime.setMinutes(endTime.getMinutes() + durationMinutes);
       const formattedEndTime = formatTime(endTime);
-      
-      console.log('Akutbokning data:', {
-        datum: currentDate,
-        starttid: currentTime,
-        sluttid: formattedEndTime
-      });
       
       // Hitta det största lediga rummet just nu
       const availableRoom = await bookingsApi.findLargestAvailableRoom(

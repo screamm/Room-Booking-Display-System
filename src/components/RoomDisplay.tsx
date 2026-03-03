@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Room, Booking } from '../types/database.types';
@@ -196,12 +196,18 @@ export const RoomDisplay: React.FC = () => {
     }
   }, [room, currentTimeString, fetchBookings]);
 
+  // Håll en uppdaterad referens till fetchBookings utan att trigga omsubscription
+  const fetchBookingsRef = useRef(fetchBookings);
+  useEffect(() => {
+    fetchBookingsRef.current = fetchBookings;
+  }, [fetchBookings]);
+
   // Supabase Realtime subscription för realtidsuppdateringar
   useEffect(() => {
     if (!room) return;
 
     // Initial fetch
-    fetchBookings();
+    fetchBookingsRef.current();
 
     const channel = supabase
       .channel(`room-display-${room.id}`)
@@ -219,21 +225,21 @@ export const RoomDisplay: React.FC = () => {
           const today = now.toISOString().split('T')[0];
           const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
           bookingsCache.delete(`${room.id}-${today}-${tomorrow}`);
-          fetchBookings();
+          fetchBookingsRef.current();
         }
       )
       .subscribe();
 
     // Behåll 60-sekunders fallback-polling som säkerhetsnät
     const fallbackTimer = setInterval(() => {
-      fetchBookings();
+      fetchBookingsRef.current();
     }, 60000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(fallbackTimer);
     };
-  }, [room, fetchBookings]);
+  }, [room]); // Bara room som dependency – fetchBookings via ref
 
   // Funktion för att uppdatera bokningar vid användarinteraktion
   const handleManualRefresh = () => {
