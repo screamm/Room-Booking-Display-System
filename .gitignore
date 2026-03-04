@@ -1,37 +1,38 @@
-node_modules
+# Dependencies
+node_modules/
+worker/node_modules/
 
-# Environment variables
+# Build output (Cloudflare Pages bygger från källkod)
+dist/
+
+# Environment variables - ALDRIG committa dessa
 .env
 .env.local
 .env.*.local
 .env.production
 .env.development
 
+# Cloudflare Wrangler lokalt dev-tillstånd
+worker/.wrangler/
+.wrangler/
+
+# Claude AI internfiler
+.claude/
+
 # Logs
-logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
-pids
 *.pid
 
-# Dependency directories
-node_modules
-
-# Optional npm cache directory
+# Cache
 .npm
-
-# Optional eslint cache directory
 .eslintcache
-
-# Optional yarn cache directory
 .yarn
 
-# Optional yarn error log file (see https://yarnpkg.com/advanced/qa#which-files-should-be-gitignored)
-yarn-error.log
-
-
-
-
-
+# OS
+.DS_Store
+Thumbs.db
